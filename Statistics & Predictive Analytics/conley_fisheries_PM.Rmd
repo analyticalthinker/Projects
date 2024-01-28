@@ -1,0 +1,233 @@
+---
+title: "IS 6489 - Conley Fisheries Case_PM"
+author: "Prabhudatta Mohapatra"
+date: "02/26/2023"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<!-- Note:   -->
+
+<!-- These instructions are commented out and will not display when you knit your RMarkdown document. -->
+
+<!-- - Change the information in the yaml header above:  title, author, data. -->
+<!-- - Make sure output is html_document. -->
+<!-- - Once you are finished coding, **run each chunk individually to make sure there are no errors**.  (If necessary fix your code.) Once your code is error-free, click "knit" on the menu above. Your document should compile to HTML, provided that you have output set to "html_document." -->
+<!-- - In the code chunk above ("setup") echo is set to TRUE.  This means that the code in your chunks will be displayed, along with the results, in your compiled document. -->
+
+## Load packages and create empty data frame
+
+```{r}
+# Load packages
+library(tidyverse) 
+library(dplyr)
+library(ggplot2)
+
+# Define n
+n <- 1000
+
+# Empty data frame for 1000 simulated days
+data <- data.frame(day = seq(1:n),
+                demand = NA, # demand in Rockport
+                quantity = NA, # quantity sold
+                price = NA, # price per pound
+                cost = 10000, # cost of daily operations
+                earnings = NA)
+
+head(data)
+
+```
+
+Your goal in this project is to:
+
+1. Fill in the dataset with random numbers drawn from the probability distributions defined in the case description---distributions for demand, quantity and price.
+
+2. Use those numbers to compute earnings.
+
+3. Summarize the earnings distribution to inform a business recommendation.
+
+Note:  
+
+1. This case is slightly different from the one in the tutorial in that quantity sold is a function of demand: if demand is greater than 3500 then quantity is 3500 otherwise it equals demand.  The mathematical notation used for this relationship in the case description---min(3500, D)---is NOT R code. There are various ways of creating the quantity variable but `ifelse()` works well.
+
+2. Use set.seed(123) once before doing any simulation.  Why 123?  This is an arbitrary seed that controls a random process, making the results comparable.  People who share the seed will get the same results. However, R will increment the seed in a deterministic fashion every time you run a random process.  So if you simulate your random variables in a different order than the one stipulated in the empty dataframe that has been provided, *you will get a different answer*.  Is it wrong?  No, but your results will not be identical to those of your classmates.  For example:
+
+```{r}
+set.seed(123)
+rnorm(1000) %>% mean()
+rnorm(1000) %>% mean()
+
+```
+
+The means of the two samples are different (.016 vs. .042) because R has incremented the seed for the second sample. 
+
+Compare to:
+
+```{r}
+set.seed(123)
+rnorm(1000) %>% mean()
+
+set.seed(123)
+rnorm(1000) %>% mean()
+
+```
+
+3. Mr. Conley has 50 boats, but we will be modeling earnings per boat.  (It would be simple enough to multiply your per boat results by 50 to get earnings for the fleet.)
+
+## Questions
+
+Lightly comment your code and use pipes for readability.
+
+Most of the questions require some writing.  Please place your text immediately after the ">" in each question, which will make it into a block quote.
+
+Use this code chunk to simulate demand, quantity and price, and then compute earnings. Make sure to use set.seed(123) before running any random process to ensure that your results are reproducible!
+
+```{r}
+#Preparing simulated data
+set.seed(123)
+data <- data %>%
+  mutate(
+         price = rnorm(n = n, mean = 3.65, sd = 0.2),
+         demand = sample(x = c(0, 1000, 2000, 3000, 4000, 5000, 6000), size = n, replace = T, prob = c(0.02, 0.03, 0.05, 0.08, 0.33, 0.29, 0.2)),
+         quantity = ifelse(demand > 3500, 3500, demand),
+         earnings = (price * quantity) - cost)
+head(data)
+```
+
+
+### Q1
+
+Plot simulated earnings.
+
+```{r}
+# summary of earnings
+data$earnings %>%
+  summary()
+
+#histogram of earnings
+ggplot(data, aes(x = earnings)) + geom_histogram(binwidth = 100) + geom_vline(xintercept = mean(data$earnings), color = "blue", linetype = "dashed") + labs(title = "Histogram of simulated earnings at Rockport per boat", subtitle = "Average earnings = $1830")
+
+#probability density plot of earnings
+ggplot(data, aes(x = earnings)) + geom_density() + geom_vline(xintercept = mean(data$earnings), color = "red", linetype = "dashed") + labs(title = "Density Plot of simulated earnings at Rockport per boat", subtitle = "Average earnings = $1830")
+
+```
+> Above histogram and density plot shows the distribution of Earnings at Rockport per boat . Earnings data is left skewed.
+
+### Q2
+
+What is P(F > 1375)?
+
+```{r}
+#probability of earnings more than $1375
+set.seed(123)
+(data$earnings > 1375) %>% mean()
+```
+
+>The earnings in Gloucester port is $1375 per boat. Probability of Clint's boats will earn more than $1375 at Rockport is 82.7% or the daily earnings would be above $1375 for 82.7% of days. So, by selling the catch in Rockport, 82.7% of days Clint's boat would make earnings more than $1375, which would be profitable than selling the catch at Gloucester. 
+
+### Q3
+
+What is P(F < 0)
+
+```{r}
+#Probability of total loss (earnings < $0)
+set.seed(123)
+(data$earnings < 0) %>% mean()
+```
+
+> Earnings < 0 means it's total loss. Based on the simulated earnings data, the probability that Clint's boats will face a total loss when selling the catch in Rockport is 11.2%. The comapny will loose total money about 11.2% of the times while selling catch at Rockport.
+
+### Q4
+
+What is the expected value (mean) of F?
+
+```{r}
+#Average earning of Clint's boat selling catch at Rockport 
+set.seed(123)
+round(data$earnings %>% mean(),2)
+```
+
+> As per the expected value of earnings, on an avergae each of Clint's boats could have earnings of $1829.87 selling the daily catch in Rockport. The average earnings per day per boat is $1829.87. The average earnings by selling the daily catch at Rockport ($1829.87) is higher than the average earnings at Gloucester ($1375.00).
+
+### Q5
+
+What is your advice to Mr. Conley?  Write one paragraph in which you argue a position. In your answer please incorporate the quantitative details from your simulation, and consider in particular the trade-off between risk and reward.
+
+>Mr. Clint is eager to make profit and he is fine to take some risk if it is financially justified. Considering above simulation results, we can advice Mr.Clint to choose Rockport over Gloucester for business. The average earnings per boat from Gloucester is $1375 and average earnings per boat from Rockport is $1829.87 as per simulated data. So, doing business in Rockport each boat on an average would generate $1829.87 - $1375 = $454.87 more profit daily than doing business in Gloucester. Also, simulated data suggests a probability of 0.827 of having earnings greater than $1375 (average earning at Gloucester) doing business in Rockport. However, there is a probality of 0.112 when Clint's boats will face a total loss when selling the catch in Rockport, which is fine while comparing to the earnings the boats will make. We have no information that  Even though doing business in Gloucester safe and provides steady           
+
+>The net profit gained by clint conley when taking the risk at rockport is 1829.874.This clearly shows that though its risky, its clear that he would be earning profit by selling at rockport. Around 454 times more than that he would do in Gloucester.With this great margin between 1375 and 1829, 
+
+>..And also it is not confirmed that we will get a profit every day in Gloucester. We can see in the map that the distance from Newburyport to Rockport is shorter than Gloucestor which reduces the operational costs of boats. If we consider profit for all 50 boats 50* 1829.84=91492 at Rockport and 50*1375=68750 at Gloucestor which means we can get 22742 dollars per day at Rockport more than the Gloucestor port (approximately 40% more). To conclude selling the fish at Rockport has more rewards than risks.
+
+>Clint Conley should Choose the Port of RockPort to run his business.
+Making yearly calculations we can observe the following:
+- Every weekday a boat goes fishing (5 days a week)<br>
+- Each Year has 52 weeks<br>
+- A Fleet of 50 Boats goes fishing daily <br>
+- A total of 13,000 "daily catches" selling oportunities to either port <br>
+(calculated as followed 5 x 52 x 50 = 13000)<br>
+- Port of Gloucester has an average daily profit of $1,375<br>
+( calculated as: 3.25 * 3500 - 10000 = 1375 daily profit per boat)<br>
+- Port of Rockport has an average daily profit of $1,968.515 with a probability to be better than Gloucester of 83.9%<br><br>
+Using the above information, we can predictthe following for any given year:<br>
+If Conoley sells to the port of Gloucester, he will make a profit of <b>$17,875,000</b><br>
+(13000 x 1375 = 17875000) <br>
+If Conoley sells to the port of Rockport, he will make a profit between the range between <b>$21,470,593.105 to $25,590,695</b><br> 
+[ ( (13000 x 1968.515) - (13000 x 1968.515 x (1 - 0.839) ) = 21470593.105]  to  [(13000 x 1968.515) = 25590695] <br><br>
+We can clearly observe that at its worst case scenario, selling to the port of Rockport will make a higer profit of at least $3,595,593.105 more than selling to the port of Gloucester. And on the best case scenafrio it can make up to $7,715,695 more than selling to the port of Gloucester.
+
+>Gloucester is a safe, steady bet if you feel more comfortable with having a gaurenteed daily cash flow.
+If you have the savings and the stomach for a more volatile daily cash flow, I would suggest selling everyday at Rockport port. On average, you'll make $524 more each day if you sell at Rockport than if you sell at Gloucester - that's $191k more every year! Selling at Rockport will have it's bad days, though. You'll likely have to toss part of your catch about once per week and all of your catch about 7 days a year. Every other day, though, you'll be earning over $2660 to make up for it. 
+
+>Rockport is more profitable than Gloucester. As Conley Fisheries commands a fleet of 50, average daily profit per fleet is expected to be $94,000 (50 * $1880) selling only at Rockport, compared to $68,750 (50 * $1375) selling only at Gloucester.
+
+> Were Conley Fisheries to become more risk-averse, we might suggest Clint instruct half the fleet to sell at Rockport, and half at Gloucester. While this would reduce expected average daily profit by fleet to $81,375 (25 * $1375 + 25 * $1880), it would also cut down on the risk inherent to selling in Rockport.
+
+
+
+
+### Challenge
+
+This question is optional and not graded!
+
+The cod population off the coast of New England has been declining for decades (down 95% in the early 90s) due to overfishing and destructive fishing practices, such as bottom trawling.  Most recently, a 10-year rebuilding plan was implemented for this stock in 2014, which is now managed under the Northeast Multispecies (Groundfish) Fishery Management Plan.  The catch has been restricted as follows:
+
+1. Limitations on net type.
+2. Restrictions on fish size (over 19 inches).
+3. Restrictions on size of catch (200 lbs/boat north of Cape Cod).
+4. Restrictions on fishing season (no fishing during the winter conservancy period, Nov 15 - Jan 31, or during the spring conservancy period, Apr 16 - July 21).
+
+While Clint Conley supports these measures, which he understands as necessary to create a sustainable cod fishery, they had devastating impacts on his business. Particularly in the area north of Cape Cod, where Gloucester and Rockport are located, the catch was limited dramatically: 200 pounds per boat per day during the season.
+
+Cod prices have gone up dramatically.  Gloucester is still a reliable market (he can always sell his limit, 200 lbs), but Conley is sometimes unable to sell  at Rockport at all. When he can sell at Rockport, the prices are variable, but usually quite a bit higher than at Gloucester.
+
+Update your simulation with this new information:
+
+He has managed to reduce his cost per boat to $2000. 
+
+His fleet now consists in 10 boats.
+
+Prices (in dollars) at Gloucester are fixed: 
+
+- Winter/Spring fishing season (Feb. 1 to April 15): 17.
+- Summer/Fall fishing season (July 22 - Nov 15): 25.
+
+Prices (in dollars) at Rockport are normally distributed: N(mean, sd).
+
+- Winter/Spring fishing season (Feb. 1 to April 15):  N(27, 6).
+- Summer/Fall fishing season (July 22 - Nov 15): N(32, 8). 
+
+Moreover, the probability mass function for demand at Rockport, in both selling seasons, based on recent data, is now as follows:
+
+```{r}
+data.frame(demand = c(0, 50, 100, 150, 200),
+           probability = c(.02, .1, .3, .3, .28))
+```
+What is your recommendation to Mr. Conley based on your new simulation?
+
+>
