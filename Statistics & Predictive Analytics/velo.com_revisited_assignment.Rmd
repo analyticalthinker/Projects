@@ -1,0 +1,167 @@
+---
+title: "Velo.com_revisited_assignment_PM"
+author: "Prabhudatta Mohapatra"
+date: "03/12/2023"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<!-- Note:   -->
+
+<!-- These instructions are commented out and will not display when you knit your RMarkdown document. -->
+
+<!-- - Change the information in the yaml header above:  title, author, date. -->
+<!-- - Make sure output is html_document. -->
+<!-- - Once you are finished coding, **run each chunk individually to make sure there are no errors**.  (If necessary fix your code.) Once your code is error-free, click "knit" on the menu above. Your document should compile to HTML, provided that you have output set to "html_document." -->
+<!-- - In the code chunk above ("setup") echo is set to TRUE.  This means that the code in your chunks will be displayed, along with the results, in your compiled document. -->
+
+## Load packages and create empty data frame
+
+```{r}
+# loading libraries
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+Note that `lm()` will automatically assign alphabetic factor levels to character predictors.  To make the regression coefficient for checkout_system easier to interpret in this tutorial we will manually change the factor levels.  This will ensure that the coefficient is, appropriately, positive.
+
+```{r}
+# importing and checking data
+v <- read_csv("velo.csv")
+v <- v %>% 
+  mutate(checkout_system = factor(checkout_system, 
+                                  levels = c("old", "new"))) # or
+# v$checkout_system <- factor(v$checkout_system, levels = c("old", "new"))
+str(v)
+summary(v)
+```
+
+## Questions
+
+Lightly comment your code and use pipes for readability.
+
+Comment briefly on each of the questions, as directed.  Only the the final question requires a lengthier response.
+
+The point of this case is to revisit velo.com  with a different methodology.  For reference, in the previous module you we obtained the following results from a t-test comparing the old and new systems:
+
+```{r}
+# T-test comparing old and new systems
+t.test(filter(v, checkout_system == "new")$spent, 
+       filter(v, checkout_system == "old")$spent)
+
+# T-test comparing old and new systems for mobile users
+t.test(filter(v, checkout_system == "new" & device == "mobile")$spent, 
+       filter(v, checkout_system == "old" & device == "mobile")$spent)
+```
+
+### Q1
+
+Fit a simple linear regression with `spent` as the target variable and `checkout_system` as the predictor. Based on the model summary, answer the following questions:
+
+1. What is average spending for customers using 1) the new system and 2) the old system? This information can be extracted directly from the linear model output.
+
+2. What is the difference in average customer spending between the new and old systems, and is the difference statistically significant at the p < .05 level?
+
+3. Compare these results to those you obtained using a t-test in the last module (see the above output).
+
+```{r}
+# linear regression model (spent~checkout_system)
+lm1<- lm(spent ~ checkout_system, data = v)
+summary(lm1)
+```
+
+> Answer:  
+
+> 1. Average spending for customers using the new system 2217.15 + 62.74 =  $2279.89 and for the old system it is $ 2217.15.
+
+> 2. The difference in average customer spending between the new and old system is 2279.89 - 2217.15 = $62.74. The difference in average customer spendings is not statistically significant at the p < .05 level as from the linear regression for checkout_systems we have got the p-value of 0.154, which is greater than 0.05 and hence we are not rejecting the null hypothesis. 
+
+> 3. Comparing the results of t-test and linear regression, no difference between the two methods has been found. Comparing the t-value or statistics it's same for both the methods (1.42) and comparing the p-value it's same for both the methods (0.15). Also, CI (-23.45215, 148.93475) and average spending by new & old system ($2279.89, $2217.15) are almost same in both the methods.
+
+
+### Q2
+
+Fit a simple linear regression with `spent` as the target variable and `checkout_system` as the predictor, but include only customers who were using a mobile device. (Later you will learn how to fit this sort of regression using all the data, but for now subset the data to include only mobile users.) Answer these questions based on the model summary for this regression:
+
+1. What is the difference in mobile customer spending between the new and old systems?
+
+2. Is the difference statistically significant at the p < .05 level?
+
+3. Compare these results to those you obtained using a t-test in the last module (see the above output).
+
+Remember that the syntax for creating a simple linear regression model in R has the form:  `lm(y ~ x, data)`. This code will produce estimates of the model intercept and coefficients which you can use to assemble the regression equation:  y = intercept + coefficient * x.  To get more information about the model (including standard errors and p-values) use the generic `summary()` function. 
+
+
+```{r}
+# linear regression model for mobile users (spent~checkout_system)
+lm2 <- lm(spent ~ checkout_system, data = filter(v, device == "mobile"))
+summary(lm2)
+```
+
+> Answer:  
+
+> 1. The difference in spending between the new and old systems for mobile customers is $2323 - $2174.92 = $148.08.
+
+> 2. Yes, the difference is statistically significant because the linear regression provided a p-value of 0.017 which is less than 0.05 and hence we are rejecting the null hypothesis. We can interpret the same from the below confidence interval as it does not include zero (0), the difference in spending between the old and new systems for the mobile customers is statistically significant   
+
+> 3. Comparing the results of t-test and linear regression, there is no difference between the two methods has been found. Comparing the t-value or statistics it's same for both the methods (2.389) and comparing the p-value it's same for both the methods (0.017). Also, CI (26.5992, 269.5608) and average spending by new & old system ($2322, $2174.92) are almost same in both the methods.
+
+
+###  Q3
+
+Using the summary of the regression model object from Q2, calculate a 95% confidence interval (CI) for the `checkout_system` coefficient using 1.96 as the critical value. Interpret the CI: What does it mean exactly?
+
+```{r}
+#calculating 95% CI for checkout_system
+#Confidence Interval
+UCI<-148.08+1.96*61.98
+LCI<-148.08-1.96*61.98
+print(paste("Upper Confidence Interval:" ,UCI))
+print(paste("Lower Confidence Interval:" ,LCI))
+```
+
+> Answer: CI is It is the interval for the difference in means and gives us the information that is similar to and consistent with the p-value value. But it also informs about effect size which is the expected (average) difference in spending as a result of using the new checkout system for mobile users. 95% CI for the checkout_system ranges from (26.5992, 269.5608), which does not include zero(0) and hence it is statistically significant and there is a statistically significant difference present in the mean spending through different checkout systems for mobile users. The CI provides the range for which the values of the checkout_system cofficient and intercept values would get 95% of the time when repeated sampling is done.
+
+
+### Q4
+
+Based on the model output in Q2, along with the 95% CI you calculated in Q3, develop best and worst case revenue projections for the new checkout system.  What range of increased revenue might the company expect using the new checkout system (compared to the old system) and, based on this, does the coefficient estimate for `checkout_system`  have *practical* significance in your view? (Hint: multiply the lower and upper bounds of the CI you calculated in Q3 by an arbitrary number of customers.  That range, remember, is expressed in terms of average dollars per customer.)
+
+A 95% CI for a coefficient represents the most likely range of values under repeated sampling.  Working with a range is advantageous.  Velo.com executives might well be interested in the low end of the range in order to assess the financial risks associated with implementing the new system.  Additionally, scaling up the average spending per customer gives you a way to convey the practical significance of using the new system. 
+
+What do I mean by "scaling up"? For communication purposes it is often helpful to multiply averages, like the upper and lower bounds of the confidence interval, by some arbitrary scaling number (in this case, for example, 1000 or 5000 customers or whatever you think makes sense) so that a decision-maker can get a better sense of the overall impact to the business of a proposed change.  Think back to the Conley Fisheries case where you calculated that the maximum daily loss per boat was /$10,000.  By itself, that may seem like a sustainable loss. But remember there are 50 boats. So, really, to convey a complete sense of the risk the maximum per boat daily loss must be scaled up --- multiplied by --- the number of boats in the fleet. 
+
+```{r}
+#best case revenue projection considering 5000 customers
+best_case<- UCI * 5000
+best_case
+
+#worst case revenue projection considering 5000 customers
+worst_case<- LCI * 5000
+worst_case
+
+#difference in best case and worst case scenario
+revenue_diff<- best_case - worst_case
+revenue_diff
+```
+
+> Answer: Based on the above calculations (considering 5000 customers a month) velo.com management would expect an increase of revenue range of (1347804 ~ 132996) $ 1214808 (per month) by implementing the new checkout system when compared to the old checkout system. Also, management would expect a revenue of $ 1347804 in best case scenario and a revenue of $ 132996 in worst case scenario. As the difference is pretty large ($ 1214808) we can confirm that the coefficient estimate for the checkout_system is practically significant and meaningful.
+
+
+### Q5
+
+What course of action should Sarah recommend to the management at velo.com based on this additional analysis? Please incorporate your analytic results from above in fashioning an answer. In particular, cite the results from the new analysis, the simple linear regression, and discuss your interpretation of the range you developed in Question 4.
+
+> Answer: Based on the above calculations and comparisons done for control and treatment groupd using t-tests and linear regressions, Sarah should recommend the velo.com management to implement the new checkout_system as the generated revenue (considering 5000 monthly customers) in the best case scenario and worst case scenarion ($ 1347804 and $ 132996 respectively for 95% CI) and the revenue range ($ 1214808) are greater than that of old checkout system for the customers using mobiles for checkout. Pretty large difference in revenue(range) ($ 1214808) confirms that the coefficient estimate for the checkout_system is practically significant and meaningful. Also, difference in average spending for mobile users between old and new checkout systems are statitically significant (from linear regression) as p-value (0.017) is less than alpha (0.05), so, null hypothesis (No difference between old and new checkout systems spending  for mobile users) rejected. Calculated confidence intervals (26.5992, 269.5608) does not include zero(0) signifies that coefficient for checkout system is statistically significant. Average difference in spending between old and new checkout system for mobile users is $148.08. However, when we considered all the customers p-vale of liner regression model was 0.154 so we did not reject the null hypothesis and it was not statistically significant. Multiple t-tests confirms the above results. Regression model provides the coefficient for the target variable, so the regresion formula for the revenue using the new checkout system: 2174.92 + (148.08 *monthly_customers_count). From the formula we can observe that having more customers will have higher revenues. So, velo.com must implement new checkout_system for mobile users to retain customers and increase revenue.      
+
+
+### Challenge
+
+
+Read through the tutorial on the bootstrap (included in the lightbulb package).  Use the technique to estimate a confidence interval for `checkout_system` regression coefficient.  Does it agree with the confidence interval computed using the SEs for the coefficient from the regression model output?  Please show your code for your calculations.
