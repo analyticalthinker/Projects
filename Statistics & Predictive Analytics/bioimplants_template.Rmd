@@ -1,0 +1,172 @@
+---
+title: "BioImplants Case _ PM"
+author: "Prabhudatta Mohapatra"
+date: "04/09/2023"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+#loading libraries
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+```
+
+
+```{r}
+# importing data
+bi<- read.csv("bioimplants.csv")
+```
+
+```{r}
+#checking data
+summary(bi)
+glimpse(bi)
+```
+
+```{r}
+#checking missing values
+sapply(bi, function(x) sum(is.na(x)))
+```
+> No missing value (NA) found
+
+## Q1
+
+```{r}
+# attrition rate
+bi %>% summarize(attrition_rate = round(mean(attrition == "Yes"),2))
+
+#retention rate
+bi %>% summarize(retention_rate = round(mean(attrition == "No"),2))
+```
+> Overall attrition rate is 0.16. Majority class is "No" attrition at 0.84.
+
+```{r}
+#summary table of conditional attrition rates
+bi %>%
+  group_by(department, job_role) %>%
+  summarize(attrition_rate = round(mean(attrition == "Yes"),3)) %>%
+  arrange(desc(attrition_rate), by_group = TRUE)
+```
+
+> Above table presents the conditional attrition rates by department and job role where employees in sales department working as sales representative have highest attrition rate of 0.40 and employess in research and development department working as reseach director has the lowest attrition rate of 0.03. 
+
+## Q2
+
+```{r}
+bi_data1<-bi %>% select(-employee_number)
+logistic_model <- glm(ifelse(attrition=="Yes", 1, 0) ~.,data = bi_data1, 
+                    family = binomial)
+summary(logistic_model)
+```
+```{r}
+# Calculating the proportion of correct predictions and Compare the model's predictions with the observed labels
+(ifelse(predict(logistic_model, type = "response") >.5, "Yes", "No") == bi_data1$attrition) %>% mean() %>% round(2)
+```
+> Accuracy of the model is 0.89 with a decision threshold of 0.5.
+Majority class is "NO". The baseline rate of the majority class was 0.84. The logistic regression model, at accuracy of 0.89, is doing quite a bit better than just predicting the mojarity class (0.84).
+
+## Q3
+
+```{r}
+# Removing department from data
+bi_data2 <- bi_data1 %>% select (-department)
+#
+bi_scaled <- bi_data2 %>% 
+  mutate_if(is.numeric, function(x) scale(x) %>% as.vector()) 
+glimpse(bi_scaled)  
+```
+```{r}
+# scaled data model
+logistic_scaled_model <- glm(ifelse(attrition=="Yes", 1, 0) ~.,
+                             data = bi_scaled, 
+                             family = binomial)
+summary(logistic_scaled_model)
+```
+
+```{r}
+# Calculating the proportion of correct predictions and Compare the model's predictions with the observed labels
+(ifelse(predict(logistic_scaled_model, type = "response") >.5, "Yes", "No") == bi_scaled$attrition) %>% mean() %>% round(2)
+```
+
+> business_travel(Travel_Frequently: 1.92), job_role(Sales Representative: 1.96, Laboratory Technician: 1.48, Human Resources: 1.30), over_time(Yes: 1.97), and marital_status(Single: 1.14) have the largest effect size in centered and scaled data regression. 
+
+> Business Travel: From the scaled data model business_travel (Travel_Frequently) has a positive effect size of 1.92 which is almost doubles the effect on the attrition variable log odds. 1.92 represents the change in the log odds of attrition associated with an increase from the non_travel category.
+
+> Job Role: From the scaled data model different job_roles have different positive effect size  (Sales Representative: 1.96, Laboratory Technician: 1.48, Human Resources: 1.30) on the attrition variable log odds. 1.96 represents the change in the log odds of attrition (for sales representatives) associated with an increase campared to job role Healthcare Representatives.  1.48 represents the change in the log odds of attrition (for Laboratory Technicians) associated with an increase campared to job role Healthcare Representatives. Similarly, 1.30 represents the change in the log odds of attrition (for Human Resources) associated with an increase campared to job role Healthcare Representatives.
+
+> Over Time: From the scaled data model over_time (Yes) has a positive effect of 1.97 which is almost doubles the effect of the attrition variable log odds. 1.97 represents the change in the log odds of attrition associated with an increase from the no over time category.
+
+> Marital Status: From the scaled data model marital status (single) has a positive effect of 1.14 on the attrition variable log odds. 1.14 represents the change in the log odds of attrition associated with an increase from the divorced category. 
+
+## Q4
+
+> From the logistic regression with the scaled data it is observed that Business travel, Job role, Over time, and Marital status are the important variables which have large effect size on the employee attrition. Bioimplants can make changes in policies for business travel and over time however, controlling marital status is out of BioImplants's scope and more information about the job role is required to determine how it can be improved to increase employee retention. So, Bioimplants can make changes in the policy that employess do not need to work over time and build strategies so that employees do not need to travel or travel rarely if required. BioImplants can adopt two below policies. Let's check how these scenarios would affect the attrition rate.
+
+> 1. Travel Rarely with no Over time
+> 2. No Travel with no Over time
+
+```{r}
+
+# Current attrition probability 
+existing_policy<-predict(logistic_scaled_model, 
+        type = "response") %>% mean
+cat("Existing Policy Attrition Probability:", round((existing_policy),4))  
+
+# Current attrition rate for travel frequently and work over time
+
+old_policy<-predict(logistic_scaled_model, 
+        newdata = mutate(bi_scaled, business_travel = "Travel_Frequently",over_time="Yes"),
+        type = "response") %>% mean
+cat("Travle Frequently and Work Overtime Attrition Probability:", round((old_policy),4))  
+
+# Updated attrition probability with new policies
+
+# Policy change #1 : Travel_Rarely with No overtime
+new_policy1<-predict(logistic_scaled_model, 
+        newdata = mutate(bi_scaled, business_travel = "Travel_Rarely",over_time="No"),
+        type = "response") %>% mean
+cat("New Policy#1 Attrition Probability:", round((new_policy1),4))  
+
+# change in attrition due to policy #1
+
+cat("Reduction in attrition due to implementation of Policy #1:", round((existing_policy - new_policy1)*100,2) , "%")
+
+# Policy change #2 : No Travel with No overtime
+new_policy2<-predict(logistic_scaled_model, 
+        newdata = mutate(bi_scaled, business_travel = "Non-Travel",over_time="No"),
+        type = "response") %>% mean
+cat("New Policy#2 Attrition Probability:", round((new_policy2),4))  
+
+# change in attrition due to policy #2
+
+cat("Reduction in attrition due to implementation of Policy #2:", round((existing_policy - new_policy2)*100,2) , "%")
+
+```
+
+> With existing policies attrition rate is 16.12 % and for employees who travel frequently and work overtime have an attrition rate of 43.62 %. 
+
+> So, from the above analysis if Bioimplant adopts the suggested policy #1 for employees to travel rarely for business with no over time required it would reduce the attrition rate by 6.63%. 
+
+> Also, from the above analysis if Bioimplant adopts the suggested policy #2 and build strategies for employees so that no one needs travel for business with no over time required it would reduce the attrition rate by 11.72 %. 
+
+>In the case when it is impossible to avoid the travel, BioImplant can make strategies so that employees will travel rarely only when it is required and travel requirements can be fulfilled by different employees in rataion so that no single employee has to travel very frequently.   
+
+## Q5
+
+> Employee attrition is an expensive problem for businesses and with an attrition rate of 16% BioImplants has not escaped it. Above analysis of BioImplants employee data revealed that attrition varies across departments and job roles. Highest attrition rate of 40% is observed among Sales Representatives, and the lowest attrition rate of 2.5% is observed for the Research Director role. 
+
+> From the logistic regression with the scaled data it is observed that Business travel, Job role, Over time, and Marital status are the important variables which have largest effect size on the employee attrition. business_travel(Travel_Frequently: 1.92), job_role(Sales Representative: 1.96, Laboratory Technician: 1.48, Human Resources: 1.30), over_time(Yes: 1.97), and marital_status(Single: 1.14) have the largest effect size in centered and scaled data regression. The logistic model with scaled data has the accuracy of 0.89 which is better than just predicting the majority class (0.84). Business_travel has a positive effect on attrition, job_role has both positive and negative effect on attrition for different job roles, marital_status has a positive effect on attrition, and over_time has a positive effect on attrition. Bioimplants can make changes in policies for business travel and over time however, controlling marital status is out of BioImplants's scope and more information about the job role is required to determine how it can be improved to increase employee retention though we know job role specific attrition rate. To reduce costs associated with attrition, Angelica can recommend BioImplants implement policies to eliminate overtime and reduce the business travel requirements( particularly for Sales representatives) which would not hamper the revenue of BioImplants and decrease the attrition rate. 
+
+> Angelica can recommend two policy changes to implement for current employees:
+1. Travel Rarely with no Over time
+2. No Travel with no Over time
+
+> With the existing policies the current overall attrition of BioImplants employees is 16.12 %. For the employees who travel frequently and work over time has an attrition rate of 43.62%. If the current trend continues and more employees travel frequently and work over time attrition rate would go up (43.62 - 16.12 = 27.5%). However, If the first policy is implemented for all the employees the new attrition rate would be 9.49 %, which means there would be a decrese of 6.63% in attrition rate. If the second policy is implemented for all the employees the new attrition rate would be 4.40%, which means there would be a decrese of 11.72% in attrition rate. Also, BioImplant should focus on the employees whose are sales representatives work overtime and travel frequently as they have high attrition rate and implement policies to retain them. If implementing the above suggested policies would be successful, BioImplant would save the expenses of rehire a position which costs about 21% of the annual salary of the original position and add it to revenue.
+
