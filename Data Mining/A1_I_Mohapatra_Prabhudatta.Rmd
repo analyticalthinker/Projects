@@ -1,0 +1,518 @@
+---
+title: "Titanic data exploration markdown"
+author: "Prabhudatta MOhapatra"
+date: "October 7th, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# Libraries
+
+```{r library}
+library(tidyverse)
+library(psych)
+library(RWeka) 
+```
+
+
+ The sinking of the RMS Titanic is one of the most infamous shipwrecks in history.
+ On April 15, 1912, during her maiden voyage, the Titanic sank after colliding with 
+ an iceberg, killing 1502 out of 2224 passengers and crew.
+ This sensational tragedy shocked the international community and led to better 
+ safety regulations for ships.One of the reasons that the shipwreck led to such 
+ loss of life was that there were not enough lifeboats for the passengers and crew. 
+ Although there was some element of luck involved in surviving the sinking, 
+ some groups of people such as women, children, and the upper-class 
+ were more likely to survive than others.
+
+ VARIABLE DESCRIPTIONS:
+
+ PassengerID     Unique passenger identifier
+ Survived        Survival (0 = No; 1 = Yes)
+ Pclass          Passenger Class(1 = 1st; 2 = 2nd; 3 = 3rd) (Pclass is a proxy for socio-economic status (SES)
+                     1st ~ Upper; 2nd ~ Middle; 3rd ~ Lower)
+ Name            Name
+ Sex             Sex
+ Age             Age (Age is in Years; Fractional if Age less than One (1) If the Age is Estimated, it is in the form xx.5)
+ Sibsp           Number of Siblings/Spouses Aboard
+ Parch           Number of Parents/Children Aboard
+ Ticket          Ticket Number
+ Fare            Passenger Fare
+ Cabin           Cabin
+ Embarked        Port of Embarkation (C = Cherbourg; Q = Queenstown; S = Southampton)
+
+
+ ---------------------------------------------------------------------------
+
+# Import a csv file
+
+```{r Set up, data import and inspection}
+
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+titanic <- read.csv("titanic.train.csv", stringsAsFactors = FALSE)
+```
+
+
+# Examine the overall data frame
+
+str() shows the number of observations, and the number, names, types and some values of columns
+
+
+```{r structure aka str}
+titanic %>% str()
+```
+
+## You can retrieve and save the number of rows and number of coloumns of a data frame
+```{r nrow}
+
+# create local variables for row and column numbers
+
+row <- nrow(titanic)
+row
+
+#should be 891
+```
+```{r ncol}
+
+col <- ncol(titanic)
+col
+
+#should be 12
+```
+
+
+
+## Show the head and tail rows of a data frame
+
+
+```{r head function}
+
+titanic %>% head() 
+
+```
+
+```{r tail function}
+
+titanic %>% tail()
+```
+
+```{r head function override defaults}
+
+titanic %>% head(10)
+
+```
+
+```{r tail function override defaults}
+
+titanic %>% tail(7)
+
+```
+
+## summary() 
+
+shows the mean and the five-number statistics indicating the spread of each column's values
+
+summary()
+
+```{r summary}
+
+titanic %>% summary()
+
+```
+
+
+
+# Data transformation
+Remove unique identifiers from further analysis as they are not interesting without additional feature extractions
+### selecting columns
+
+```{r select specific columns}
+
+titanic %>% select(Sex, Age) %>% head()
+```
+
+
+### Remove columns
+```{r Data transformation 1}
+
+titanic <- titanic %>% select(-PassengerId, -Name, -Ticket)
+
+```
+
+### Factor categorical columns
+Change Survived and other nominal variables to factors
+Use structure to see data before and after the transformation
+```{r Data str prior to factor}
+
+titanic %>% str()
+
+```
+
+
+```{r Character variable factorization}
+
+titanic$Survived <- factor(titanic$Survived)
+titanic$Sex <- factor(titanic$Sex)
+titanic$Pclass <- factor(titanic$Pclass)
+# Cabin and Embarked is converted to Factor after the blank spaces have been removed in next code chunks as it was giving the error that: "Caused by error in `if_else()`: ! `false` must be a character vector, not a `factor` object." 
+#titanic$Cabin <- factor(titanic$Cabin)
+#titanic$Embarked <- factor(titanic$Embarked) 
+
+knitr::include_graphics("titanic_error.png")
+
+#tidyverse syntax
+#titanic <- titanic %>% mutate(Cabin = factor(Cabin))
+
+#Check your work to make sure factorization was successful
+
+titanic %>% str()
+
+```
+
+
+
+
+Remove observations with missing Age values. 
+
+This missing data handling approach has the obvious disadvantages of 
+the applicability of the model to data with missing age.
+
+To keep observations with missing Age values require careful imputation of Age missingness. 
+
+The various missing data imputation methods are beyond the knowledge required for this tutorial.
+
+```{r find columns with NA }
+
+titanic %>% summarize(across(everything(), ~ sum(is.na(.))))
+```
+
+### Drop columns
+dropping columns from the dataframe
+```{r drop columns  }
+titanic <- titanic %>% drop_na()
+```
+On the other hand, keeping missing factor levels might be able to lead to meaningful models
+Empty level names of the Cabin and Embarked factors will cause problems in some analysis.
+Other missing factor value imputation remains a good option beyond the scope of this tutorial.
+
+### Counts of empty strings in columns
+
+```{r}
+# Count empty strings in all columns
+# filter to count all nonzero columns
+titanic %>%
+  summarize(across(everything(), ~ sum(. == ""))) #%>% 
+  #t() %>%
+  #as.data.frame() %>%
+  #filter(V1>0)
+```
+```{r}
+titanic <- titanic %>%
+  mutate(Cabin = if_else(Cabin == "","Missing",Cabin),
+         Embarked = if_else(Embarked == "","Missing",Embarked))
+
+titanic %>%
+  summarize(across(everything(), ~ sum(. == "")))
+
+titanic$Cabin <- factor(titanic$Cabin)
+titanic$Embarked <- factor(titanic$Embarked) 
+
+# Checking that factorization worked properly
+titanic %>% str()
+```
+
+
+
+
+
+# Understanding numeric variables
+
+```{r referring to columns by name}
+
+# base R version
+summary(titanic[c("Sex", "Age")])
+
+#tidyverse version
+titanic %>% select(Sex,Age) %>% summary()
+
+# YOU DO.
+titanic %>% select(Sex,Age,Fare) %>% summary()
+```
+## Quantile function
+Show summary of one or more columns
+
+```{r quintile and decile}
+
+# quantiles and deciles in Base R
+
+quantile(titanic$Fare, seq(from = 0, to = 1, by = 0.20))
+quantile(titanic$Fare, seq(from = 0, to = 1, by = 0.10))
+
+# same in tidyverse
+titanic %>% pull(Fare) %>% quantile(., seq(from = 0, to = 1, by = 0.20))
+titanic %>% pull(Fare) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+
+# now you do the same for Age
+titanic %>% pull(Age) %>% quantile(., seq(from = 0, to = 1, by = 0.20))
+titanic %>% pull(Age) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+```
+## Boxplots
+
+Useful numeric visualization.
+
+```{r boxplots}
+
+# Base R
+boxplot(titanic$Fare, main="Boxplot of Age in the titanic data set",
+        ylab="Age")
+
+# ggplot
+# replace the following code with code to display Fare.
+# change the title to reflect the new data. 
+
+titanic %>% 
+ggplot(aes(y=Fare)) + 
+geom_boxplot() +
+ggtitle('boxplot of Titanic Fare')
+
+```
+```{r histograms}
+
+# histograms of a numeric variable
+
+hist(titanic$Fare, main = "Histogram of Fare in the titanic data set",
+     xlab = "Fare")
+
+titanic %>% ggplot() +
+  geom_histogram(aes(x=Fare),binwidth = 20) +
+  ggtitle('Histogram of Fare in the titanic data set')
+
+# create a new histogram of Age using the following template
+
+titanic %>% ggplot() +
+geom_histogram(aes(x=Age),binwidth = 1) +
+ggtitle('Histogram of Age in the titanic data set')
+
+```
+
+```{r variance and standard deviation}
+
+#base R
+var(titanic$Fare)
+sd(titanic$Fare)
+
+#tidyverse
+titanic %>% pull(Fare) %>% var()
+titanic %>% pull(Fare) %>% sd()
+
+
+# now you do the same for Age 
+var(titanic$Age)
+sd(titanic$Age)
+
+
+
+```
+## Rounding
+
+It's nice to be able to make numeric variables more readable. Consider rounding to improve readability.
+
+```{r rounding}
+
+titanic %>% select(Fare) %>% head()
+
+# rounded
+titanic %>% select(Fare) %>% round() %>% head()
+
+# now you try for Age
+titanic %>% select(Age) %>% round() %>% head()
+
+```
+
+
+
+## Understand relationship of multiple variables
+
+Generate correlation coefficients of two numeric variables in a 2x2 matrix
+ cor(X,Y) lies between -1 and 1. zero means no correlation. 1 or -1 indicates full correlation
+ positive value means positive correlation and negative values mean negative relationships
+ Examine the components in the formulation for correlation coefficients
+ cor(X,Y) = cov(X,Y)/(sd(X)*sd(Y)) 
+ cov(X,Y) = E[X-E(X)]*E[Y-E(Y)]
+```{r Understand variable relationships }
+# cor,  boxplot, 2D scatter plot - plot, 3D scatter plot
+
+# scatter plot: two numeric variables
+# base R
+plot(titanic$Age, titanic$Fare)
+
+# ggplot
+titanic %>% ggplot() +
+  geom_point(aes(x=Age,y=Fare))
+
+cov(titanic[,c("Fare","Age")]) # this will display incorrect results if missing values are not removed
+var(titanic[,c("Fare","Age")])
+```
+
+## pairs.panels
+
+```{r pairs panels}
+# Generate 2D scatter plots and correlation coefficients
+# tidyverse 
+# select only numeric variables for pairs panels. 
+titanic %>% select(where(is.numeric)) %>% pairs.panels()
+
+```
+
+
+# Exploring factor variables
+
+## nlevels(), is.factor()
+```{r Explorating factor variables}
+# A factor's distinct values
+
+# base R
+is.factor(titanic$Survived)
+nlevels(titanic$Survived)
+
+# tidy syntax
+titanic %>% pull(Survived) %>% nlevels()
+
+# now you do the same for Pclass
+
+is.factor(titanic$Pclass)
+nlevels(titanic$Pclass)
+```
+## Barplot
+
+```{r barplot}
+
+plot(titanic$Pclass,main="Barplot of Pclass")
+
+#tidyveryse
+titanic %>% ggplot() +
+  geom_bar(aes(x=Pclass)) +
+  ggtitle("Barplot of Pclass")
+
+# now you create a barplot for Sex
+titanic %>% ggplot()+
+  geom_bar(aes(x= Sex))+
+  ggtitle("Barplot of Sex")
+
+```
+# Exploring Categorical grouped by Categorical (Factor by Factor)
+
+```{r contingency table grouped}
+
+
+# base R
+table(titanic$Survived,titanic$Pclass) # shows the raw counts
+prop.table(table(titanic$Survived,titanic$Pclass)) # shows the proportions
+prop.table(table(titanic$Survived,titanic$Pclass))*100 # shows the percentages
+
+
+# sort of tidyverse (ish)
+titanic %>% select(Survived,Pclass) %>% table()
+titanic %>% select(Survived,Pclass) %>% table() %>% prop.table() %>% round(2)
+titanic %>% select(Survived,Pclass) %>% table() %>% prop.table() %>% round(2) * 100
+
+# prop tables for sex and survived
+table(titanic$Survived,titanic$Sex) # shows the raw counts
+prop.table(table(titanic$Survived,titanic$Sex)) # shows the proportions
+prop.table(table(titanic$Survived,titanic$Sex))*100 # shows the percentages
+
+# now you create a barplot for Sex grouped by Survived
+titanic %>% ggplot() +
+  geom_bar(aes(x=Sex,fill=Survived),position="dodge") +
+  ggtitle("Barplot of Sex by Survived")
+
+
+```
+
+
+
+```{r barplot grouped}
+
+
+#tidyveryse
+titanic %>% ggplot() +
+  geom_bar(aes(x=Pclass,fill=Survived),position="dodge") +
+  ggtitle("Barplot of Pclass by Survived")
+
+# now you create a barplot for Sex grouped by Survived
+
+titanic %>% ggplot() +
+  geom_bar(aes(x=Sex,fill=Survived),position="dodge") +
+  ggtitle("Barplot of Sex by Survived")
+```
+Wow! A lot more passengers in Class 3 didn't survive than those who did. And conversely in Class 1 more passengers survived than did not. In Class 2 it was a bit of a mixed bag. 
+
+
+
+Often simply looking at a single column is insufficient for the needs of the analysis. Being able to ask the question: When I group the data by a column, how do other columns behave? Is a more interesting and useful EDA task. For example: In the titanic how do the groups of passengers who survived differ from those who did not? Group our data by survived to explore this question.
+
+# Exploring numeric variables by factors
+
+## Boxplot 
+This groups values of a numeric variable based on the values of a factor
+```{r boxplot numeric values by factors}
+# base R
+boxplot(Age~Survived, data = titanic)
+
+# Below change the graph to display the difference between Survived by Fare
+
+titanic %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Survived,y=Fare,color=Survived)) +
+  ggtitle('Survived by Fare Boxplot') 
+
+
+
+
+```
+## The aggregate function
+```{r Aggregation function}
+# We can use the aggregate command to aggregate a numeric feature by a categorical one.
+
+# The aggregate function has three parameters
+
+# 1. The numeric value, e.g. sales, to be aggregated to find out, e.g., total of sales,
+#   average of sales, number of sales (i.e. orders).
+
+# 2. The set of categories, product_category and sales_region, on which you wish
+#   to aggregate
+
+# 3.The aggregation function (e.g., sum, mean, length) that you wish to use
+
+
+# this will not show in output until Knit. 
+aggregate(Fare~Survived, summary, data = titanic)
+
+#tidyverse
+
+titanic %>%
+  group_by(Survived) %>%
+  summarize(
+    min = min(Fare),
+    q1 = quantile(Fare, 0.25),
+    median = median(Fare),
+    mean = mean(Fare), # adding in mean as well
+    q3 = quantile(Fare, 0.75),
+    max = max(Fare)
+  )
+```
+## Scatter plot of numeric values and factor values
+```{r Scatter plat of numeric and factor variables}
+
+plot(titanic$Age,titanic$Fare, col=titanic$Survived, pch = as.numeric((titanic$Survived)))
+
+titanic %>% ggplot() + geom_point(aes(x=Age,y=Fare,color=Survived))
+```
+
+
+
