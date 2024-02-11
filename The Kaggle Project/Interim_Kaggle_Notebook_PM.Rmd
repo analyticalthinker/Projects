@@ -1,0 +1,431 @@
+---
+title: "Interim_Kaggel_Notebook_PM"
+author: "Prab Mohapatra"
+date: "2023-03-28"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+> The Kaggle train dataset has 81 explanatory variables and 1460 observations and test data set has 80 explanatory variables and 1459 observations, describing (almost) every aspect of residential homes (dimensions, neighborhoods, sale prices etc.) in Ames, Iowa. The data set is multivariate where the final features will be selected to predict the final price of each home using regression techniques.
+
+# Project Goal
+
+> To identify the best variables and regression method which are capable to predict the home prices at Ames, Iowa. 
+
+# Loading Libraries
+
+```{r}
+#loading libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(gridExtra)
+library(skimr)
+```
+
+# Importing Data Files
+
+```{r}
+#importing data files
+train <- read_csv("train.csv")
+test <- read_csv("test.csv")
+```
+
+# Trainging Data Cleaning and Missing value checking 
+
+```{r}
+#summary of training data set
+skim(train)
+```
+
+```{r}
+# checking NAs in train data
+sum(is.na(train)) # total NAs
+sapply(train, function(x) sum(is.na(x))) # Each variable wise NAs
+```
+
+# Variables Distribution and Transformation
+
+```{r}
+#SalePrice Distribution Vs Log transformed SalePrice Distribution
+pl1<-ggplot(train, aes(SalePrice)) +
+  geom_histogram(bins = 30) +
+  labs(title = "SalePrice Distribution")
+pl2<-ggplot(train, aes(log(SalePrice))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log SalePrice Distribution")
+grid.arrange(pl1, pl2, ncol = 2, nrow = 1)
+```
+
+> From the above graph it can be observed that the SalePrice is not normally distributed and right-skewed. So SalePrice is log transformed for modeling. After log transformation it looks more like a bell-curved normal distribution.
+
+```{r}
+#LotArea Distribution Vs Log transformed LotArea Distribution
+pl3<-ggplot(train, aes(LotArea)) +
+  geom_histogram(bins = 30) +
+  labs(title = "LotArea Distribution")
+pl4<-ggplot(train, aes(log(LotArea))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log LotArea Distribution")
+grid.arrange(pl3, pl4, ncol = 2, nrow = 1)
+```
+
+> From the above graph it can be observed that the LotArea is not normally distributed and highly right-skewed. So LotArea is log transformed for modeling. After log transformation it looks more like a normal distribution however having a right tail.
+
+```{r}
+#GrLivArea Distribution Vs Log transformed GrLivArea Distribution
+pl5<-ggplot(train, aes(GrLivArea)) +
+  geom_histogram(bins = 30) +
+  labs(title = "GrLivArea Distribution")
+pl6<-ggplot(train, aes(log(GrLivArea))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log GrLivArea Distribution")
+grid.arrange(pl5, pl6, ncol = 2, nrow = 1)
+```
+
+> From the above graph it can be observed that the GrLivArea is not normally distributed and right-skewed. So GrLivArea is log transformed for modeling. After log transformation it looks more like a normal distribution.
+
+```{r}
+#OverallQual Distribution
+ggplot(train, aes(OverallQual)) +
+  geom_histogram(bins = 30) +
+  labs(title = "OverallQual Distribution")
+```
+
+```{r}
+#Need to factor the overall quality
+ggplot(train, aes(as.numeric(OverallQual), SalePrice)) +
+  geom_point() +
+  geom_smooth(se = F, col = 2) + # Local regression named LOESS
+  labs(title = "SalePrice ~ OverallQual, with local regression")
+```
+
+> As observed from the above graphs Overall Quality cannot be described by a line (as it looks more like an exponential distribution ) so it will be converted to factor for modeling purpose.
+
+```{r}
+#GarageCars Distribution
+ggplot(train, aes(GarageCars)) +
+  geom_histogram(bins = 30) +
+  labs(title = "GarageCars Distribution")
+
+
+
+```
+
+> Garage cars looks normally distributed, so no transformation will be used for modeling. 
+
+# Correlation Plot
+
+```{r}
+#correlation Plot
+corrdata <- select(train, LotArea, GrLivArea, TotalBsmtSF, OverallQual, GarageCars, YearBuilt, SalePrice) %>% 
+  mutate(SalePrice = log(SalePrice),
+                    LotArea = log(LotArea),
+                    GrLivArea = log(GrLivArea),
+                    totalarea = log(TotalBsmtSF + GrLivArea))
+corrdata <- select(corrdata, LotArea, OverallQual, GarageCars, YearBuilt, totalarea, SalePrice)
+corrplot(cor(corrdata), method="color", addCoef.col = "black", tl.col="black", tl.cex=0.8, number.cex=0.8, title = "Correlation Plot SalePrice Vs Adjusted Variables", mar=c(0,0,1,0))
+```
+
+>Above plot shows the correlation bewtween the adjusted factors and the log transformed SalePrice.  
+
+# Modeling for SalePrice Prediction
+
+## Additiona Variables - Training Data
+
+```{r}
+# creating total area and log transformation of sale price
+train<-train %>% 
+  mutate(TotalArea = (TotalBsmtSF + GrLivArea),
+         log_SalePrice = log(SalePrice),
+         log_LotArea = log(LotArea),
+         TotalBath = (HalfBath + FullBath + BsmtFullBath + BsmtHalfBath),
+         LotFrontage = ifelse(is.na(LotFrontage), mean(LotFrontage, na.rm = T), LotFrontage),
+         BsmtQual = case_when(BsmtQual == "Ex" ~ 5,
+                              BsmtQual == "Gd" ~ 4,
+                              BsmtQual == "TA" ~ 3,
+                              BsmtQual == "Fa" ~ 2,
+                              BsmtQual == "Po" ~ 1),
+         BsmtQual = ifelse(is.na(BsmtQual), 0, BsmtQual),
+         KitchenQual = case_when(KitchenQual == "Ex" ~ 5,
+                              KitchenQual == "Gd" ~ 4,
+                              KitchenQual == "TA" ~ 3,
+                              KitchenQual == "Fa" ~ 2,
+                              KitchenQual == "Po" ~ 1),
+         KitchenQual = ifelse(is.na(KitchenQual), 0, KitchenQual),
+         ExterQual= case_when(ExterQual == "Ex" ~ 5,
+                              ExterQual == "Gd" ~ 4,
+                              ExterQual == "TA" ~ 3,
+                              ExterQual == "Fa" ~ 2,
+                              ExterQual == "Po" ~ 1),
+         ExterQual = ifelse(is.na(ExterQual), 0, ExterQual),
+         HeatingQC= case_when(HeatingQC == "Ex" ~ 5,
+                              HeatingQC == "Gd" ~ 4,
+                              HeatingQC == "TA" ~ 3,
+                              HeatingQC == "Fa" ~ 2,
+                              HeatingQC == "Po" ~ 1),
+         HeatingQC = ifelse(is.na(HeatingQC), 0, HeatingQC))
+table(train$BsmtQual)
+table(train$KitchenQual)
+table(train$ExterQual)
+table(train$HeatingQC)
+```
+
+## Train and Test Data Set
+
+```{r}
+#splitting the data into train and test data set
+set.seed(123)
+index <- sample(x = 1:nrow(train), size = nrow(train)*.7, replace = F)
+
+head(index)
+```
+
+```{r}
+# Subset train using the index to create train_fold
+train_fold <- train[index, ]
+
+# Subset the remaining row to create validation fold.
+validation_fold <- train[-index, ]
+```
+
+## RMSE and R2 Function
+
+```{r}
+# Create functions for calculating RMSE and R-squared
+rmse <- function(observed, predicted) sqrt(mean((observed - predicted)^2))
+
+R2 <- function(observed, predicted){
+  TSS <- sum((observed - mean(observed))^2)
+  RSS <- sum((observed - predicted)^2)
+  1- RSS/TSS
+}
+```
+
+> After multiple trial-error, it is decided to use log transformed LotArea, factored OverallQual, GarageCars, YearBuilt, log transformed TotalArea(TotalBsmtSF + GrLivArea) which are best suited to precdict the log transformed sale price
+
+# Data Description
+
+> SalePrice: the property's sale price in dollars. This is the target variable that you're trying to predict
+
+>LotArea: Lot size in square feet
+
+>OverallQual: Overall material and finish quality
+
+>GarageCars: Size of garage in car capacity
+
+>YearBuilt: Year house id built
+
+>TotalBsmtSF: Total square feet of basement area
+
+>GrLivArea: Above grade (ground) living area square feet
+
+# Training Model
+
+```{r}
+ggplot(train, aes(log(GarageArea+1))) +
+  geom_histogram(bins = 30) +
+  labs(title = "GrLivArea Distribution")
+```
+
+
+```{r}
+corrdata <- select(train, log(LotArea), GrLivArea, TotalBsmtSF, OverallQual, GarageCars, YearBuilt, log_SalePrice) %>% 
+  mutate(SalePrice = log(SalePrice),
+                    LotArea = log(LotArea),
+                    GrLivArea = log(GrLivArea),
+                    totalarea = log(TotalBsmtSF + GrLivArea))
+corrdata <- select(corrdata, LotArea, OverallQual, GarageCars, YearBuilt, totalarea, SalePrice)
+corrplot(cor(corrdata), method="color", addCoef.col = "black", tl.col="black", tl.cex=0.8, number.cex=0.8, title = "Correlation Plot SalePrice Vs Adjusted Variables", mar=c(0,0,1,0))
+```
+
+
+```{r}
+# Train model using the train_fold
+train_model <- (lm(log_SalePrice ~ log(LotArea) + factor(OverallQual) + GarageCars + (YearBuilt * YearRemodAdd) + log(TotalArea) + factor(Neighborhood) + log(`1stFlrSF`) + `2ndFlrSF` + factor(OverallCond) + factor(BsmtQual) + BedroomAbvGr + factor(KitchenQual) + factor(ExterQual) + factor(LotConfig) + factor(BldgType) + factor(HeatingQC) + factor(HouseStyle) + SaleCondition + GarageArea + TotalBath, data = train_fold))
+#Summary of the train model
+summary(train_model)
+```
+0.1325 on 935 degrees of freedom
+Multiple R-squared:  0.8969
+## Training Model Prediction
+```{r}
+# Get predictions for the train fold
+predictions_train <- predict(train_model, newdata = train_fold)
+
+#calculating rmse and r2 for the training data set 
+rmse(train_fold$log_SalePrice, predictions_train)
+R2(train_fold$log_SalePrice, predictions_train)
+```
+
+[1] 0.1267574
+[1] 0.896876
+> For train data:
+
+> RMSE for train set 0.1626 (0.16)
+
+> R2 for train set 0.8303 (0.83)
+
+## Validation Model Prediction
+```{r}
+# Get predictions for the validation fold
+predictions_validation <- predict(train_model, newdata = validation_fold)
+
+#calculating rmse and r2 for the validation data set 
+rmse(validation_fold$log_SalePrice, predictions_validation)
+R2(validation_fold$log_SalePrice, predictions_validation)
+```
+[1] 0.1236865
+[1] 0.908901
+> For test data:
+
+> RMSE for train set 0.1531 (0.15)
+
+> R2 for train set 0.8605 (0.86)
+
+# Submission Model
+
+```{r}
+#submission model
+submission_model <- (lm(log_SalePrice ~ log(LotArea) + factor(OverallQual) + GarageCars + (YearBuilt * YearRemodAdd) + log(TotalArea) + factor(Neighborhood) +  log(`1stFlrSF`) + `2ndFlrSF` + factor(OverallCond) + factor(BsmtQual) + BedroomAbvGr + factor(KitchenQual) + factor(ExterQual) + factor(LotConfig) + factor(BldgType) + factor(HeatingQC) + factor(HouseStyle) + SaleCondition + GarageArea + TotalBath, data = train))
+
+#Submission model summary
+summary(submission_model)
+```
+0.1269 on 1374 degrees of freedom
+Multiple R-squared:  0.9049
+
+> For Submission Model:
+
+> Residual Standard Error: 0.16
+
+> R2: 0.84
+
+# Test Data Cleaning and Missing Value Checking 
+
+```{r}
+# summary of test data set
+head(test)
+```
+
+```{r}
+# Checking for NAs
+sapply(test, function(x) sum(is.na(x)))
+```
+
+```{r}
+## for NA imputation Total Basement SF
+ggplot(test, aes(TotalBsmtSF)) +
+  geom_histogram(bins = 30) +
+  labs(title = "TotalBsmtSF Distribution")
+```
+
+```{r}
+summary(test$TotalBsmtSF)
+```
+
+> As TotalBsmtSF is used to calculate the total area and predict the sale price in train model same will be calculated for the prediction using the test data. There is a missing value and it will be imputed using the mean of TotalbsmtSF as the above graph of TotalbsmtSF looks almost like a mnormal distribution.   
+
+```{r}
+## for NA imputation - Garage Cars/Garage ARea
+ggplot(test, aes(log(GarageArea))) +
+  geom_histogram(bins = 30) +
+  labs(title = "GarageArea Distribution")
+
+ggplot(test, aes(GarageCars)) +
+  geom_histogram(bins = 30) +
+  labs(title = "GarageCars Distribution")
+```
+
+```{r}
+summary(test$GarageCars)
+```
+
+> As GarageCars is used to predict the sale price in train model same will be calculated for the prediction using the test data. There is a missing value and it will be imputed using the mean of GarageCars as the above graph of GarageCars looks almost like a mnormal distribution. 
+
+```{r}
+#Imputing values for NA
+test<- test %>% mutate( GarageCars = ifelse(is.na(GarageCars), mean(GarageCars, na.rm=TRUE), GarageCars),
+                        TotalBsmtSF = ifelse(is.na(TotalBsmtSF), mean(TotalBsmtSF, na.rm=TRUE), TotalBsmtSF),
+                         BsmtQual = case_when(BsmtQual == "Ex" ~ 5,
+                              BsmtQual == "Gd" ~ 4,
+                              BsmtQual == "TA" ~ 3,
+                              BsmtQual == "Fa" ~ 2,
+                              BsmtQual == "Po" ~ 1),
+         BsmtQual = ifelse(is.na(BsmtQual), 0, BsmtQual),
+         KitchenQual = case_when(KitchenQual == "Ex" ~ 5,
+                              KitchenQual == "Gd" ~ 4,
+                              KitchenQual == "TA" ~ 3,
+                              KitchenQual == "Fa" ~ 2,
+                              KitchenQual == "Po" ~ 1),
+         KitchenQual = ifelse(is.na(KitchenQual), 3, KitchenQual),
+         ExterQual= case_when(ExterQual == "Ex" ~ 5,
+                              ExterQual == "Gd" ~ 4,
+                              ExterQual == "TA" ~ 3,
+                              ExterQual == "Fa" ~ 2,
+                              ExterQual == "Po" ~ 1),
+         ExterQual = ifelse(is.na(ExterQual), 0, ExterQual),
+         HeatingQC= case_when(HeatingQC == "Ex" ~ 5,
+                              HeatingQC == "Gd" ~ 4,
+                              HeatingQC == "TA" ~ 3,
+                              HeatingQC == "Fa" ~ 2,
+                              HeatingQC == "Po" ~ 1),
+         HeatingQC = ifelse(is.na(HeatingQC), 0, HeatingQC),
+         GarageArea = ifelse(is.na(GarageArea), median(GarageArea, na.rm=TRUE), GarageArea),
+         BsmtFullBath = ifelse(is.na(BsmtFullBath), median(BsmtFullBath, na.rm=TRUE), BsmtFullBath),
+         BsmtHalfBath = ifelse(is.na(BsmtHalfBath), median(BsmtHalfBath, na.rm=TRUE), BsmtHalfBath),
+         TotalBath = (FullBath + HalfBath + BsmtFullBath + BsmtHalfBath))
+sapply(test, function(x) sum(is.na(x)))
+```
+## Additional Variables Test Data
+
+```{r}
+# Creating total area for test data set
+test$TotalArea <- test$TotalBsmtSF +test$GrLivArea
+```
+
+# Predicting SalePrice For Test Data
+
+```{r}
+# predicting sale price
+SalePrice<-predict(submission_model, test)
+SalePrice<-exp(SalePrice)
+Id<-test$Id
+submission<-(cbind(Id, SalePrice))
+write.csv(submission, "submission.csv", row.names = F)
+```
+
+# Kaggle Submission Report 
+
+```{r} 
+knitr::include_graphics("kaggle_submission.png") 
+```
+
+> Kaggle score or log RMSE: 0.16035
+
+> Kaggle rank: 2681 
+
+
+
+
+
+
+```{r}
+#submission model
+submission_model <- (lm(log_SalePrice ~ log(LotArea) + factor(OverallQual) + GarageCars + (YearBuilt * YearRemodAdd) + log(TotalArea) + factor(Neighborhood) +  log(`1stFlrSF`) + `2ndFlrSF` + factor(OverallCond) + factor(BsmtQual) + BedroomAbvGr + factor(KitchenQual) + factor(ExterQual) + factor(LotConfig) + factor(BldgType) + factor(HeatingQC) + factor(HouseStyle) + SaleCondition + GarageArea + TotalBath, data = train))
+
+#Submission model summary
+summary(submission_model)
+```

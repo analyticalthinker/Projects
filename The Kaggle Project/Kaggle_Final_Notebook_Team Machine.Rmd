@@ -1,0 +1,614 @@
+---
+title: "Kaggel_Final_Notebook_Team Machine"
+author: 
+ - Prabhudatta Mohapatra 
+ - Enni Su 
+ - Hunter Conrad 
+ - Shreya Chawla      
+date: "2023-04-16"
+output:
+  html_document:
+    toc: yes
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+> The Kaggle House Prices - Advanced Regression Techniques competition provides a platform to perform statistical analyses to understand what features of a house determine the sale price and how to use them to predict sale price accuratley. Kaggle provides sample data set for Ames, Iowa which has train dataset having 81 explanatory variables and 1460 observations and test data set having 80 explanatory variables and 1459 observations, describing (almost) every aspect of residential homes (dimensions, neighborhoods, sale prices etc). Insights gained will be helpful to the individuals in the decision making process trying to purchase a house.
+
+# Project Goal
+
+> Our project goal is to applying concepts of Exploratory Data Analysis, visualization, data cleaning, preprocessing, and linear models to predict house prices given the features of the house, and interpret the linear models to find out features that add value to a house price. The data set is multivariate and the most important features will be selected to predict the sale price of each home using linear regression technique.Train and test data sets provided by Kaggle will be used for the project. 
+
+# Loading Required Libraries
+
+```{r}
+#loading libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(gridExtra)
+library(grid)
+library(skimr)
+```
+
+# Importing Data Files From Kaggle
+
+```{r}
+#importing data files
+train <- read_csv("train.csv")
+test <- read_csv("test.csv")
+```
+
+# Trainging Data Summary, Missing Value Imputation, and Data Transformation 
+
+## Data Summary & Missingness Assessment
+```{r}
+#summary of training data set
+skim(train)
+```
+
+
+## Variables Distribution
+
+```{r}
+#SalePrice Distribution Vs Log transformed SalePrice Distribution
+pl1<-ggplot(train, aes(SalePrice)) +
+  geom_histogram(bins = 30) +
+  labs(title = "SalePrice Distribution")
+pl2<-ggplot(train, aes(log(SalePrice))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log SalePrice Distribution")
+grid.arrange(pl1, pl2, ncol = 2, nrow = 1)
+```
+
+> From the above graph it can be observed that the SalePrice is not normally distributed and right-skewed with some outliers. So SalePrice is log transformed for modeling. After log transformation it looks more like a bell-curved normal distribution.
+
+```{r}
+#LotArea Distribution Vs Log transformed LotArea Distribution
+pl3<-ggplot(train, aes(LotArea)) +
+  geom_histogram(bins = 30) +
+  labs(title = "LotArea Distribution")
+pl4<-ggplot(train, aes(log(LotArea))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log LotArea Distribution")
+grid.arrange(pl3, pl4, ncol = 2, nrow = 1)
+```
+
+> From the above graph it can be observed that the LotArea is not normally distributed and highly right-skewed with some outliers. So LotArea is log transformed for modeling. After log transformation it looks more like a normal distribution however having a right tail.
+
+```{r}
+#Total Area Distribution Vs Log transformed Total Area Distribution
+TotalArea = (train$TotalBsmtSF + train$GrLivArea)
+pl5<-ggplot(train, aes(TotalArea)) +
+  geom_histogram(bins = 30) +
+  labs(title = "Total Area Distribution")
+pl6<-ggplot(train, aes(log(TotalArea))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log Total Area Distribution")
+grid.arrange(pl5, pl6, ncol = 2, nrow = 1)
+```
+
+> TotalBsmtSF and GrLivArea are added to create a new variable TotalArea of the house.
+From the above graph it can be observed that the Total Area is not normally distributed and right-skewed with some outliers. So Total Area is log transformed for modeling. After log transformation it looks more like a normal distribution.
+
+```{r}
+#1stFlrSF Distribution Vs Log transformed 1stFlrSF Distribution
+pl7<-ggplot(train, aes(`1stFlrSF`)) +
+  geom_histogram(bins = 30) +
+  labs(title = "1stFlrSF Distribution")
+pl8<-ggplot(train, aes(log(`1stFlrSF`))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log 1stFlrSF Distribution")
+grid.arrange(pl7, pl8, ncol = 2, nrow = 1)
+```
+
+> From the above graph it can be observed that the 1stFlrSF is not normally distributed and right-skewed with some outliers. So 1stFlrSF is log transformed for modeling. After log transformation it looks more like a normal distribution.
+
+```{r}
+#Total_BsmtFinSF Distribution Vs Log transformed Total_BsmtFinSF Distribution
+Total_BsmtFinSF = (train$BsmtFinSF1 + train$BsmtFinSF2)
+pl9<-ggplot(train, aes(Total_BsmtFinSF)) +
+  geom_histogram(bins = 30) +
+  labs(title = "Total_BsmtFinSF Distribution")
+pl10<-ggplot(train, aes(log(Total_BsmtFinSF+1))) +
+  geom_histogram(bins = 30) +
+  labs(title = "Log Total_BsmtFinSF Distribution")
+grid.arrange(pl9, pl10, ncol = 2, nrow = 1)
+```
+
+> BsmtFinSF1 and BsmtFinSF2 are added to get the total basement finished Square feet area (Total_BsmtFinSF).
+From the above graph it can be observed that the Total_BsmtFinSF is not normally distributed and right-skewed with some outliers with most of the values are zero. So Total_BsmtFinSF is log transformed for modeling. After log transformation it looks more like a normal distribution apart from observations having a value of zero .
+
+```{r}
+#TotalBath Distribution
+TotalBath = (train$HalfBath + train$FullBath + train$BsmtFullBath + train$BsmtHalfBath)
+pl11<-ggplot(train, aes(TotalBath)) +
+  geom_histogram(bins = 30) 
+
+#BedroomAbvGr Distribution
+pl12<-ggplot(train, aes(BedroomAbvGr)) +
+  geom_histogram(bins = 30) 
+
+#GarageCars Distribution
+pl13<-ggplot(train, aes(GarageCars)) +
+  geom_histogram(bins = 30) 
+
+#GarageArea Distribution
+pl14<-ggplot(train, aes(GarageArea)) +
+  geom_histogram(bins = 30) 
+
+#YrSold Distribution
+pl15<-ggplot(train, aes(YrSold)) +
+  geom_histogram(bins = 30) 
+
+#Fireplaces Distribution
+pl16<-ggplot(train, aes(Fireplaces)) +
+  geom_histogram(bins = 30) 
+margin = theme(plot.margin = unit(c(1,1,1,1), "cm"))
+grid.arrange(pl11, pl12, pl13, pl14, pl15, pl16, ncol = 3, nrow = 2, top=textGrob("Distribution of Numeric Variables"))
+```
+
+> All the bathrooms available in a house are added to create TotalBath variable.
+From the above vizulization it can be observed that TotalBath, BedroomAbvGr, GarageCars, and GarageArea are almost look like normal distribution with GarageArea having mamy zeros. Number of houses sold is equally distributed for all the years except 2010 and most houses do not have a Fireplace with few houses having 3 Fireplaces. So, no transformations will be done to these varaibles for modeling purpose. 
+
+```{r}
+#OverallQual Distribution, need to factor the overall quality
+p1 <- ggplot(train, aes(OverallQual)) +
+  geom_histogram(bins = 30) +
+  labs(title = "OverallQual Distribution") +
+  theme(plot.title = element_text(size = 10)) 
+
+p2 <- ggplot(train, aes(as.numeric(OverallQual), SalePrice)) +
+  geom_point() +
+  geom_smooth(se = F, col = 4) + # Local regression named LOESS
+  labs(title = "SalePrice ~ OverallQual, with local regression") +
+  theme(plot.title = element_text(size = 10)) 
+
+margin = theme(plot.margin = unit(c(1,1,1,1), "cm"))
+grid.arrange(p1, p2, ncol = 2, nrow = 1, top=textGrob("Distribution of OverallQual"))
+```
+
+> As observed from the above graphs Overall Quality cannot be described by a line (as it looks more like an exponential distribution ) so it will be converted to factor for modeling purpose.
+
+```{r}
+# House style and BldgType distribution
+pl17 <- ggplot(train, aes(y = HouseStyle, fill = HouseStyle)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45),
+        legend.title = element_text(size = 7), 
+        legend.text = element_text(size = 7))
+pl18 <-ggplot(train, aes(y = BldgType, fill = BldgType)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        legend.title = element_text(size = 7), 
+        legend.text = element_text(size = 7)) 
+grid.arrange(pl17,pl18, ncol = 2, nrow = 1, top=textGrob("Distribution of Categorical Variables"))
+```
+
+> Above graphs represent the distribution of House style and Building type from which we can observe that most houses are one storey and single family house. Both House Style and BldgType will be factored for modeling purpose.
+
+```{r}
+# Neighborhood distribution
+pl19 <- ggplot(train, aes(y = Neighborhood, fill = Neighborhood)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45),
+        legend.title = element_text(size = 7), 
+        legend.text = element_text(size = 7)) +
+  labs(title = "Neighborhood Distribution")
+
+pl20 <- ggplot(train, aes(y = RoofMatl, fill = RoofMatl)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45),
+        legend.title = element_text(size = 7), 
+        legend.text = element_text(size = 7)) +
+  labs(title = "RoofMatl Distribution")
+grid.arrange(pl19, pl20, ncol = 2, nrow = 1, top=textGrob("Distribution of Categorical Variables"))
+```
+
+> Above graph represents the distribution of neighborhoods where houses were sold and it can be observed that NAmes (North Ames) area has the most number of houses sold. Also, most of the houses has the RoofMatl of Standard (Composite) Shingle. Neighborhood and RoofMatl will be factored for modeling purpose. 
+
+## Data Transformation & Missing Value Imputation
+
+```{r}
+# Data Transformation & Missing Value Imputation
+train<-train %>% 
+  mutate(log_TotalArea = log(TotalBsmtSF + GrLivArea),
+         log_SalePrice = log(SalePrice),
+         log_LotArea = log(LotArea),
+         log_1stFlrSF = log(`1stFlrSF`), 
+         TotalBath = (HalfBath + FullBath + BsmtFullBath + BsmtHalfBath),
+         ExterQual= case_when(ExterQual == "Ex" ~ 5,
+                              ExterQual == "Gd" ~ 4,
+                              ExterQual == "TA" ~ 3,
+                              ExterQual == "Fa" ~ 2,
+                              ExterQual == "Po" ~ 1),
+         ExterQual = ifelse(is.na(ExterQual), 0, ExterQual),
+         BsmtQual = case_when(BsmtQual == "Ex" ~ 5,
+                              BsmtQual == "Gd" ~ 4,
+                              BsmtQual == "TA" ~ 3,
+                              BsmtQual == "Fa" ~ 2,
+                              BsmtQual == "Po" ~ 1),
+         BsmtQual = ifelse(is.na(BsmtQual), 0, BsmtQual),
+         log_Total_BsmtFinSF = log(BsmtFinSF1 + BsmtFinSF2 + 1),
+         HeatingQC= case_when(HeatingQC == "Ex" ~ 5,
+                              HeatingQC == "Gd" ~ 4,
+                              HeatingQC == "TA" ~ 3,
+                              HeatingQC == "Fa" ~ 2,
+                              HeatingQC == "Po" ~ 1),
+         HeatingQC = ifelse(is.na(HeatingQC), 0, HeatingQC),
+         KitchenQual = case_when(KitchenQual == "Ex" ~ 5,
+                              KitchenQual == "Gd" ~ 4,
+                              KitchenQual == "TA" ~ 3,
+                              KitchenQual == "Fa" ~ 2,
+                              KitchenQual == "Po" ~ 1),
+         KitchenQual = ifelse(is.na(KitchenQual), 0, KitchenQual))
+```
+
+> Total Area (TotalBsmtSF + GrLivArea), Total_BsmtFinSF = (BsmtFinSF1 + BsmtFinSF2), and TotalBath = (HalfBath + FullBath + BsmtFullBath + BsmtHalfBath) are created. TotalArea, SalePrice, LotArea, Total_BsmtFinSF, and 1stFlrSF are log transformed to make sure these variables distribution looks more like a normal distribution. Qualitative variables ExterQual, BsmtQual, HeatingQC, and KitchenQual are converted from category to ordinal variable to better predict the sale price. Also, if any qualitative variable value is missing it is assigned as zero.   
+
+```{r}
+#OverallCond Distribution
+pl21<-ggplot(train, aes(OverallCond)) +
+  geom_histogram(bins = 30) 
+
+#ExterQual Distribution
+pl22<-ggplot(train, aes(ExterQual)) +
+  geom_histogram(bins = 30) 
+
+#BsmtQual Distribution
+pl23<-ggplot(train, aes(BsmtQual)) +
+  geom_histogram(bins = 30) 
+
+#HeatingQC Distribution
+pl24<-ggplot(train, aes(HeatingQC)) +
+  geom_histogram(bins = 30) 
+
+#KitchenQual Distribution
+pl25<-ggplot(train, aes(KitchenQual)) +
+  geom_histogram(bins = 30) 
+
+#SaleCondition  Distribution
+pl26<-ggplot(train, aes(SaleCondition)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45))
+
+margin = theme(plot.margin = unit(c(1,1,1,1), "cm"))
+grid.arrange(pl21, pl22, pl23, pl24, pl25, pl26, ncol = 3, nrow = 2, top=textGrob("Distribution of Categorical Variables"))
+```
+
+> Above graph represents all the qualitative variables: OverallCond, ExterQual, BsmtQual, HeatingQC, KitchenQual, and Salecondition. The qualitative variables are converted to ordinal variables to better predict the sale price. These will be converted to factors for modeling purpose.   
+
+# Correlation Plot
+
+```{r}
+#correlation Plot
+corrdata <- select(train, log_SalePrice, log_LotArea, log_TotalArea, OverallQual, OverallCond, YearBuilt , YearRemodAdd, ExterQual, BsmtQual, HeatingQC,log_1stFlrSF, `2ndFlrSF`, TotalBath, BedroomAbvGr, KitchenQual, GarageCars , GarageArea, log_Total_BsmtFinSF, YrSold, Fireplaces )
+
+corrplot(cor(corrdata), method="color", addCoef.col = "black", tl.col="black", tl.cex=.4, number.cex=.4, title = "Correlation Plot: SalePrice Vs Adjusted Variables", mar=c(0,0,1,0))
+```
+
+> Above plot shows the correlation bewtween the adjusted numeric variables and the log transformed SalePrice. From the above correlation plot we can observe that the selected varaibles are highly correlated with log sale price (e.g. correlation between OverallQual and LogSalePrice is 0.82 and correlation between log_TotalArea and LogSalePrice is 0.8) which would be helpful predict the sale price accurately.
+
+## Train_fold and Validation_fold Data Preparation
+
+```{r}
+#splitting the data into train and test data set
+set.seed(123)
+index <- sample(x = 1:nrow(train), size = nrow(train)*.7, replace = F)
+
+head(index)
+```
+
+```{r}
+# Subset train using the index to create train_fold
+train_fold <- train[index, ]
+
+# Subset the remaining row to create validation fold.
+validation_fold <- train[-index, ]
+```
+
+## RMSE and R2 Function
+
+```{r}
+# Create functions for calculating RMSE and R-squared
+rmse <- function(observed, predicted) sqrt(mean((observed - predicted)^2))
+
+R2 <- function(observed, predicted){
+  TSS <- sum((observed - mean(observed))^2)
+  RSS <- sum((observed - predicted)^2)
+  1- RSS/TSS
+}
+```
+
+# Variable (Feature) Selection For Modeling
+
+> Here is a list of predictor variables used for modeling: log_LotArea, LotConfig, Neighborhood, log_TotalArea, BldgType, HouseStyle, OverallQual, OverallCond, YearBuilt, YearRemodAdd, RoofMatl, ExterQual, BsmtQual, HeatingQC, log_1stFlrSF, 2ndFlrSF, TotalBath, BedroomAbvGr, KitchenQual, GarageCars, GarageArea, SaleCondition, log_Total_BsmtFinSF, YrSold, and Fireplaces. The variables which are highly correlated with the sale price and help increase the R-square value of train-fold, validation_fold, and submission model while decreasing the RMSE value are selected to predict the Sale Price of the houses. An interaction term between YearBuilt and YearRemodAdd has been added to the model to describe a situation in which the effect of YearBuilt variable on the Sale Price depends on the YearRemodAdd which is a second causal variable (that is, when effects of the two causes are not additive).
+
+# Data Description
+
+1. SalePrice: the property's sale price in dollars. This is the target variable that you're trying to predict
+2. LotArea: Lot size in square feet
+3. LotConfig: Lot configuration
+4. Neighborhood: Physical locations within Ames city limits
+5. TotalBsmtSF: Total square feet of basement area
+6. GrLivArea: Above grade (ground) living area square feet
+7. BldgType: Type of dwelling
+8. HouseStyle: Style of dwelling
+9. OverallQual: Overall material and finish quality
+10. OverallCond: Overall condition rating
+11. YearBuilt: Original construction date
+12. YearRemodAdd: Remodel date
+13. RoofMatl: Roof material
+14. ExterQual: Exterior material quality
+15. BsmtQual: Height of the basement
+16. HeatingQC: Heating quality and condition
+17. 1stFlrSF: First Floor square feet
+18. 2ndFlrSF: Second floor square feet
+19. BsmtFullBath: Basement full bathrooms
+20. BsmtHalfBath: Basement half bathrooms
+21. FullBath: Full bathrooms above grade
+22. HalfBath: Half baths above grade
+23. Bedroom: Number of bedrooms above basement level
+24. KitchenQual: Kitchen quality
+25. GarageCars: Size of garage in car capacity
+26. GarageArea: Size of garage in square feet
+27. SaleCondition: Condition of sale
+28. BsmtFinSF1: Type 1 finished square feet
+29. BsmtFinSF2: Type 2 finished square feet
+30. YrSold: Year Sold
+31. Fireplaces: Number of fireplaces
+
+
+# Modeling
+## Train_fold Model
+
+
+```{r}
+# Train model using the train_fold
+train_model <- (lm(log_SalePrice ~ log_LotArea + factor(LotConfig) + factor(Neighborhood) + log_TotalArea + factor(BldgType)  + factor(HouseStyle) + factor(OverallQual) + factor(OverallCond) + (YearBuilt * YearRemodAdd) + factor(ExterQual) + factor(BsmtQual) + factor(HeatingQC) +  log_1stFlrSF + `2ndFlrSF` + TotalBath + BedroomAbvGr + factor(KitchenQual) + GarageCars + GarageArea + SaleCondition + log_Total_BsmtFinSF + YrSold + Fireplaces + factor(RoofMatl) , data = train_fold))
+#Summary of the train model
+summary(train_model)
+```
+
+> Residual standard error for Train_fold model: 0.1185 (0.12)
+
+> Multiple R-squared for Train_fold model:  0.9183 (0.92)
+
+
+## Train_fold Prediction
+```{r}
+# Get predictions for the train fold
+predictions_train <- predict(train_model, newdata = train_fold)
+
+#calculating rmse and r2 for the training data set 
+rmse(train_fold$log_SalePrice, predictions_train)
+R2(train_fold$log_SalePrice, predictions_train)
+```
+
+> RMSE for Train_fold Prediction: 0.1128045 (0.11)
+
+> R2 for Train_fold Prediction: 0.9183293 (0.92)
+
+
+## Validation_fold Prediction
+```{r}
+# Get predictions for the validation fold
+validation_fold <- validation_fold %>% filter(validation_fold$RoofMatl !="Membran")
+predictions_validation <- predict(train_model, newdata = validation_fold)
+
+#calculating rmse and r2 for the validation data set 
+rmse(validation_fold$log_SalePrice, predictions_validation)
+R2(validation_fold$log_SalePrice, predictions_validation)
+```
+
+> In the RoofMatl variable there is only one observation having the category of "Membran". So it can either be in train_fold or validation_fold. So, the row having the value of "Membran" for RoofMatl is removed to able to predict the validation fold sale price (and to avoid the error that the same categories are not avaiable in both the train fold data and validation fold data).
+
+> RMSE for Test_fold Prediction: 0.1166372 (0.12)
+
+> R2 for Test_fold Prediction: 0.9190226 (0.92)
+
+## Submission Model
+
+```{r}
+#submission model
+submission_model <- (lm(log_SalePrice ~ log_LotArea + factor(LotConfig) + factor(Neighborhood) + log_TotalArea+ factor(BldgType)  + factor(HouseStyle) + factor(OverallQual) + factor(OverallCond) + (YearBuilt * YearRemodAdd) + factor(ExterQual) + factor(BsmtQual) + factor(HeatingQC) +  log_1stFlrSF + `2ndFlrSF` + TotalBath + BedroomAbvGr + factor(KitchenQual) + GarageCars + GarageArea + SaleCondition + log_Total_BsmtFinSF + YrSold + Fireplaces + factor(RoofMatl), data = train))
+
+#Submission model summary
+summary(submission_model)
+```
+
+> Residual standard error for Submission Model: 0.115 (0.12)
+
+> Multiple R-squared for Submission Model:  0.9226 (0.92)
+
+## Validation
+
+```{r}
+#extracting fitted values
+fitted_values<-fitted(lm(log_SalePrice ~ log_LotArea + factor(LotConfig) + factor(Neighborhood) + log_TotalArea + factor(BldgType)  + factor(HouseStyle) + factor(OverallQual) + factor(OverallCond) + (YearBuilt * YearRemodAdd) + factor(ExterQual) + factor(BsmtQual) + factor(HeatingQC) +  log_1stFlrSF + `2ndFlrSF` + TotalBath + BedroomAbvGr + factor(KitchenQual) + GarageCars + GarageArea + SaleCondition + log_Total_BsmtFinSF + YrSold + Fireplaces, data = train)) 
+residuals = fitted_values-train$log_SalePrice
+#residual plot  
+pl25<-ggplot(train, aes(fitted_values, residuals)) +
+  geom_point() +
+  geom_smooth(formula=y~x,method = "lm", se = F, col = "blue") +
+  labs(title = "Residuals for the Submission Model") +
+  theme(plot.title = element_text(size=10))
+
+#fitted values vs observed values plot for log Sale Price
+pl26<- ggplot(train, aes(fitted_values, log_SalePrice)) +
+  geom_point() +
+  geom_smooth(formula=y~x,method = "lm", se = F, col = "blue")+
+  labs(title = "Plot between fitted and observed SalePrice Values") +
+  theme(plot.title = element_text(size=10))
+
+margin = theme(plot.margin = unit(c(1,1,1,1), "cm"))
+grid.arrange(pl25, pl26, ncol = 2, nrow = 1, top=textGrob("Fitted value plots (Residulas, Observed)"))
+```
+
+> From the residual plot of the Submission Model, we can observe that the residuals are randomly distributed around the summary line  or residual line = 0. There is no visual pattern in residual distribution which satisfies the condition for selecting the correct regression technique for modeling and confirms a good fit for the data.
+
+> From the fitted vs observed plot of Sale Price values, we can observe that the linearity assumption condition of the data is satisfied and so, implemented linear regression method is justified. Data is accurately presented with a line that satisfies the conditions of a good model. We can see that most of the points are pretty close to the summary line,which confirms a good fit of data. 
+
+
+```{r}
+# Histogram of residuals
+ggplot(train, aes(residuals)) +
+  geom_histogram(bins = 30) +
+  labs(title = "Histogram of residuals")
+```
+
+
+> Histogram of the residuals is used to verify normal distribtution of the variance. A close observation of the plot shows a symmetric bell-shaped histogram that is evenly distributed around zero indicates that the residuals are normally distributed and the assumption that variance is normally distributted is true. This also confirms that the implemented linear regression model is the right model for the data.
+
+# Test Data Summary, Missing Value Imputation, and Data Transformation 
+
+## Data Summary & Missingness Assessment
+
+```{r}
+# summary of test data set
+skim(test)
+```
+## Variables Distribution
+
+```{r}
+## Total Basement SF distribution and summary for missing value imputation 
+ggplot(test, aes(TotalBsmtSF)) +
+  geom_histogram(bins = 30) +
+  labs(title = "TotalBsmtSF Distribution")
+summary(test$TotalBsmtSF)
+```
+
+> As TotalBsmtSF is used to calculate the total area and predict the sale price in submission model,the same will be calculated to predict the sale price for test data. There is a missing value and it will be imputed using the mean of TotalbsmtSF as the above graph of TotalbsmtSF looks almost like a normal distribution with a couple of outliers.   
+
+```{r}
+## BsmtFullBath distribution and summary for missing value imputation 
+ggplot(test, aes(BsmtFullBath)) +
+  geom_histogram(bins = 30) +
+  labs(title = "BsmtFullBath Distribution")
+summary(test$BsmtFullBath)
+```
+
+> BsmtFullBath is used to calculate the TotalBath variable and to predict the sale price in submission model and will be used to predict the sale price for test data. There is a missing value and it will be imputed using the median of BsmtFullBath as the above graph of BsmtFullBath is right skewed and majority is zero(0).   
+
+```{r}
+## BsmtHalfBath distribution and summary for missing value imputation 
+ggplot(test, aes(BsmtHalfBath)) +
+  geom_histogram(bins = 30) +
+  labs(title = "BsmtHalfBath Distribution")
+summary(test$BsmtHalfBath)
+```
+
+> BsmtHalfBath is used to calculate the TotalBath variable and to predict the sale price in submission model and will be used to predict the sale price for test data. There is a missing value and it will be imputed using the median of BsmtHalfBath as the above graph of BsmtHalfBath is right skewed and majority is zero(0).   
+
+
+```{r}
+## GarageCars distribution and summary for missing value imputation 
+ggplot(test, aes(GarageCars)) +
+  geom_histogram(bins = 30) +
+  labs(title = "GarageCars Distribution")
+summary(test$GarageCars)
+```
+
+> GarageCars is used to predict the sale price in submission model and will be used to predict the sale price for test data. There is a missing value and it will be imputed using the mean of GarageCars as the above graph of GarageCars looks almost like a normal distribution. 
+
+```{r}
+## GarageArea distribution and summary for missing value imputation 
+ggplot(test, aes(GarageArea)) +
+  geom_histogram(bins = 30) +
+  labs(title = "GarageArea Distribution")
+summary(test$GarageArea)
+```
+
+> GarageArea is used to predict the sale price in submission model and will be used to predict the sale price for test data. There is a missing value and it will be imputed using the median of GarageCars as the above graph of GarageArea is right skewed.
+
+## Data Transformation & Missing Value Imputation
+
+```{r}
+#Data Transformation & Missing Value Imputation
+test<- test %>% 
+  mutate(TotalBsmtSF = ifelse(is.na(TotalBsmtSF), mean(TotalBsmtSF, na.rm=TRUE), TotalBsmtSF),
+         log_TotalArea = log(TotalBsmtSF + GrLivArea),
+         log_LotArea = log(LotArea),
+         log_1stFlrSF = log(`1stFlrSF`),
+         BsmtFullBath = ifelse(is.na(BsmtFullBath), median(BsmtFullBath, na.rm=TRUE), BsmtFullBath),
+         BsmtHalfBath = ifelse(is.na(BsmtHalfBath), median(BsmtHalfBath, na.rm=TRUE), BsmtHalfBath),
+         TotalBath = (FullBath + HalfBath + BsmtFullBath + BsmtHalfBath),
+         GarageCars = ifelse(is.na(GarageCars), mean(GarageCars, na.rm=TRUE), GarageCars),
+         GarageArea = ifelse(is.na(GarageArea), median(GarageArea, na.rm=TRUE), GarageArea),
+         ExterQual= case_when(ExterQual == "Ex" ~ 5,
+                              ExterQual == "Gd" ~ 4,
+                              ExterQual == "TA" ~ 3,
+                              ExterQual == "Fa" ~ 2,
+                              ExterQual == "Po" ~ 1),
+         ExterQual = ifelse(is.na(ExterQual), 0, ExterQual),
+         BsmtQual = case_when(BsmtQual == "Ex" ~ 5,
+                              BsmtQual == "Gd" ~ 4,
+                              BsmtQual == "TA" ~ 3,
+                              BsmtQual == "Fa" ~ 2,
+                              BsmtQual == "Po" ~ 1),
+         BsmtFinSF1 = ifelse(is.na(BsmtFinSF1), median(BsmtFinSF1, na.rm=TRUE), BsmtFinSF1),
+         BsmtFinSF2 = ifelse(is.na(BsmtFinSF2), median(BsmtFinSF2, na.rm=TRUE), BsmtFinSF2),
+         log_Total_BsmtFinSF = log(BsmtFinSF1 + BsmtFinSF2 + 1),
+         BsmtQual = ifelse(is.na(BsmtQual), 0, BsmtQual),
+         HeatingQC= case_when(HeatingQC == "Ex" ~ 5,
+                              HeatingQC == "Gd" ~ 4,
+                              HeatingQC == "TA" ~ 3,
+                              HeatingQC == "Fa" ~ 2,
+                              HeatingQC == "Po" ~ 1),
+         HeatingQC = ifelse(is.na(HeatingQC), 0, HeatingQC),
+         KitchenQual = case_when(KitchenQual == "Ex" ~ 5,
+                              KitchenQual == "Gd" ~ 4,
+                              KitchenQual == "TA" ~ 3,
+                              KitchenQual == "Fa" ~ 2,
+                              KitchenQual == "Po" ~ 1),
+         KitchenQual = ifelse(is.na(KitchenQual), 3, KitchenQual), # median value imputed
+         Exterior1st = ifelse(is.na(Exterior1st), "VinylSd", Exterior1st)) 
+#sapply(test, function(x) sum(is.na(x)))
+```
+
+
+> Missing values are imputed for the variables that are used in the submission model and will be used to predict the sale price in the test data. Also, all other data transformations that are implemented in the training data set are executed in the test data set. Total Area (TotalBsmtSF + GrLivArea), Total_BsmtFinSF = (BsmtFinSF1 + BsmtFinSF2), and TotalBath = (HalfBath + FullBath + BsmtFullBath + BsmtHalfBath) are created. TotalArea, LotArea, Total_BsmtFinSF, and 1stFlrSF are log transformed to make sure these variables distribution looks more like a normal distribution. Qualitative variables ExterQual, BsmtQual, HeatingQC, and KitchenQual are converted from category to ordinal variable to better predict the sale price. Also, if any qualitative variable value is missing it is assigned as zero.   
+
+
+# Predicting SalePrice For Test Data
+
+```{r}
+# predicting sale price
+SalePrice<-predict(submission_model, test)
+SalePrice<-exp(SalePrice)
+Id<-test$Id
+submission<-(cbind(Id, SalePrice))
+write.csv(submission, "submission.csv", row.names = F)
+```
+
+# Kaggle Submission Report 
+
+```{r} 
+knitr::include_graphics("kaggle_submission.png") 
+```
+
+> Kaggle score or log RMSE: 0.12593 (0.13) 
+
+> Kaggle rank: 713 
+
+# Contributors & Contributions
+```{r}
+contribution<-"
+| Contributors           | Contributions                   |
+| ---------------------- | ------------------------------- |
+| Prabhudatta Mohapatra  | EDA, Data Wrangling, Modeling   |
+| Enni Su                | EDA, Data Wrangling, Modeling   |
+| Hunter Conrad          | EDA, Data Wrangling, Modeling   |
+| Shreya Chawla          | EDA, Data Wrangling, Modeling   |
+"
+cat(contribution)
+```
