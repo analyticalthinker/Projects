@@ -1,0 +1,292 @@
+---
+title: "Bank Client Data Exploration Markdown"
+author: "Prabhudatta Mohapatra"
+date: "October 7th, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Code Chunk 1: Importing Libraries and Data, Data Insecption, Transformation, & Summary 
+
+```{r Importing, Inspecting, Transforming data & Exploring Summary Statistics}
+# 1.A
+
+#install.packages('rmarkdown')
+#install.packages('psych')
+#install.packages('scatterplot3d')
+#install.packages('caret')
+library(rmarkdown)
+library(psych)
+library(scatterplot3d)
+library(caret)
+library(tidyverse)
+library(dplyr)
+
+mydir <- getwd()
+setwd(mydir)
+
+data <- read.csv("CD_additional_balanced.csv", stringsAsFactors = FALSE)
+
+data %>% str()
+# Inspecting first 10 rows of the data
+data %>% head(10)
+
+# 1.B
+
+# Transforming character variables to factor variables
+data<- data %>% mutate_if(is.character, as.factor)
+
+#Structure of transformed data
+data %>%  str()
+
+#Summary of the transformed data
+
+data %>% summary()
+
+# checking missing values
+data %>% summarize(across(everything(), ~ sum(is.na(.))))
+```
+## Bank client data features
+
+* The data frame has 9280 observations (rows) and 21 variables (columns). It's a rectangular data set.
+* There are 20 predictors and a single target variable which is 'y' means has the client subscribed a certified term deposit (CD)? (binary: "yes","no"). 
+* The data frame has variables with different data types such as int(age, duration, etc.), chr(job, marital, etc), and num(emp.var.rate, cons.price.idx, etc). 
+* The clients are aged between 17 and 98 with the mean age of client is 40.4
+* Most of the clients are in administrative job.
+* There are more married clients than divorced and single clients combined.
+* There are more clients with university degree.
+* Most of the clients never had a credit default.
+* More than 50% of the clients have housing loan.
+* On an average clients contact duration was 387.4 seconds. 
+* There are multiple variables which have data points  values set to "unknown" such as marital, default, housing, and loan.   
+* This is a well balanced data set as the number of clients subscribed a certificate term deposit is same as the number of clients has not subscribed a certificate term deposit.     
+
+# Code Chunk 2: Histogram, Boxplot, and Deciles (age, duration, campaign, pdays)
+```{r Numeric Variables Exploratory Data Analysis}
+# 2.A
+
+# Histogram of age
+data %>% ggplot() +
+  geom_histogram(aes(x=age),binwidth = 5) +
+  ggtitle('Histogram of Age in the Bank Client data set')
+
+# Histogram of duration
+data %>% ggplot() +
+  geom_histogram(aes(x=duration),binwidth = 50) +
+  ggtitle('Histogram of Duration in the Bank Client data set')
+
+# Histogram of campaign
+data %>% ggplot() +
+  geom_histogram(aes(x=campaign),binwidth = 1) +
+  ggtitle('Histogram of campaign in the Bank Client data set')
+
+# Histogram of pdays
+data %>% ggplot() +
+  geom_histogram(aes(x=pdays),binwidth = 50) +
+  ggtitle('Histogram of Pdays in the Bank Client data set')
+
+# 2.B
+
+# Boxplot for age
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(y=age)) +
+  ggtitle('Bank Client Age Boxplot')
+
+# Boxplot for duration
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(y=duration)) +
+  ggtitle('Bank Client Last Contact Duration Boxplot')
+
+# Boxplot for campaign
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(y=campaign)) +
+  ggtitle('Number of Contacts During Campaign Boxplot')
+
+# Boxplot for pdays
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(y=pdays)) +
+  ggtitle('Number of Days Past After Last Contact Boxplot')
+
+# 2.C
+
+#Decile for age
+data %>% pull(age) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+#Decile for duration
+data %>% pull(duration) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+#Decile for campaign
+data %>% pull(campaign) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+#Decile for pdays
+data  %>% pull(pdays) %>% quantile(., seq(from = 0, to = 1, by = 0.10))
+
+```
+## Bank client data Exploratory Data Analysis (Numeric Variables)
+
+* From the age histogram, it can be observed that age is right skewed and most clients are in the age range of 27 to 43. There are very few clients above the age of 75. For plotting the age histogram a bin width of 5 years is used.
+* From the histogram of Duration (in secs) it can be observed that it is highly right skewed. A bin width of 50 secs is used to plot the histogram. From the visual observation it can be inferred that most clients contact duration was between 100 to 200 seconds. There is client whose contact duration was 4199 seconds, must be an interesting conversation!
+* From the histogram of campaign (number of contacts) it can be observed that it is right skewed. A bin width of 1 contact is used to plot the histogram. Also, most of the clients have been contacted once, twice or thrice during the campaign. There is single client who has been contacted 39 times, seems like a valuable client. 
+* From Pdays histogram it can be observed that number of days that passed by after the client was last contacted from the previous campaign ranges between 0 to 20 days. Most of the clients have the value of '999' means client was not previously contacted. Although, 999 may seem arbitrary, some one who was contacted a long time back could be a proxy for some one who hasn't been contacted.
+* From the boxplot of age, minimum age is 17, maximum age is 98, and  median age is 38. There are few outliers at the upper band of the boxplot.    
+* From the boxplot of duration, minimum contact duration is 17, maximum contact duration is 4199, and  median contact duration is 265. There are multiple outliers at the upper band of the boxplot.    
+* From the boxplot of campaign, minimum number of contacts is 1, maximum number of contacts is 39, and  median number of contacts is 2. There are multiple outliers at the upper band of the boxplot.    
+* From the boxplot of pdays, minimum number of days passed by after the last contact is 0 days and most of the clients were not contacted previously.Also, data has been distributed in two nodes, one node is between 0 to 20 and another node is at 999.
+* Decile calculation represents the data distribution of age, duration, campaign, and pdays.
+
+# Code Chunk 3: Exploring factor variables(Contingency Table & Group Barplot)
+
+```{r Eploratory Data Analysis of Factor Variables}
+# "housing", "loan", "poutcome" variables are selected to answer this question 
+
+# 3.A
+
+# y and housing contingency table
+data %>% select(y, housing) %>% table()
+data %>% select(y, housing) %>% table() %>% prop.table() %>% round(4) * 100
+
+# y and loan contingency table
+data %>% select(y, loan) %>% table()
+data %>% select(y, loan) %>% table() %>% prop.table() %>% round(4) * 100
+
+# y and poutcome contingency table
+data %>% select(y, poutcome) %>% table()
+data %>% select(y, poutcome) %>% table() %>% prop.table() %>% round(4) * 100
+
+
+# 3.B
+
+#Barplot for Housing
+data %>% ggplot()+
+  geom_bar(aes(x= housing))+
+  ggtitle("Barplot of Housing")
+
+#Barplot for loan
+data %>% ggplot()+
+  geom_bar(aes(x= loan))+
+  ggtitle("Barplot of Loan")
+
+#Barplot for poutcome
+data %>% ggplot()+
+  geom_bar(aes(x= poutcome))+
+  ggtitle("Barplot of Poutcome")
+
+
+# Housing by Certified Term Deposit Barplot
+
+data %>% ggplot() +
+  geom_bar(aes(x=housing,fill=y),position="dodge") +
+  ggtitle("Barplot of Housing by Certified Term Deposit")
+
+# Loan by Certified Term Deposit Barplot
+
+data %>% ggplot() +
+  geom_bar(aes(x=loan,fill=y),position="dodge") +
+  ggtitle("Barplot of Loan by Certified Term Deposit")
+
+# Poutcome by Certified Term Deposit Barplot
+
+data %>% ggplot() +
+  geom_bar(aes(x=poutcome,fill=y),position="dodge") +
+  ggtitle("Barplot of Poutcome by Certified Term Deposit")
+
+```
+
+## Bank client data Exploratory Data Analysis (Factor Variables)
+
+* Contingency tables of counts and percentages for y (has the client subscribed a certificate term deposit) and (housing loan, personal loan, outcome of the previous marketing campaign) have been prepared.
+* From the contingency tables & Barplot:
+    1. It can be observed that percentage of clients with a housing loan and subscribed a certificate term deposit is higher than the percentage of people who do not have a a housing loan and do not subscribed a certificate term deposit. However, within the group of clients who have a housing loan there is almost no difference who subscribed a certificate term deposit or not. Barplot of housing loan suggests that there are more clients having a housing loan. 
+    2. It can be observed that percentage of clients with no personal loan and subscribed a certificate term deposit is higher than the percentage of clients with a personal loan and subscribed a certificate term deposit. However, withing the group of clients who do not have a personal loan there is almost no difference who subscribed a certificate term deposit or not. Barplot of personal loan suggests that there are few clients having a personal loan.
+    3. It can be observed that the percentage of clients with previous marketing campaign success and subscribed a certificate term deposit is higher than the percentage of clients who have a failure status from the last campaign and did not subscribe a certificate term deposit. Also, clients with a success status from the last campaign all most all of them subscribed a certificate term deposit. So, poutcome is a strong predictor of who subscribed a certificate term deposit or not. Barplot of poutcome suggests that there are more failures than successes in the previous marketing campaign.  
+    
+    
+# Code Chunk 4: Relationship Amongst Variables  
+
+```{r Exploring correation between numeric variables and aggregate summary between y and numeric variables }
+# 4.A
+
+# Correlation among variables
+data %>% select(age,duration, campaign, pdays, euribor3m, emp.var.rate, nr.employed) %>% cor()
+
+#Correlation and correlation plot among variables
+data %>% select(age,duration, campaign, pdays, euribor3m, emp.var.rate, nr.employed) %>% pairs.panels()
+
+# 4.B.i
+
+# duration by y boxplot
+
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(x=y,y=duration,color=y)) +
+  ggtitle('Duration by y Boxplot') 
+
+# emp.var.rate by y boxplot
+
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(x=y,y=emp.var.rate,color=y)) +
+  ggtitle('Employment Variation Rate by y Boxplot') 
+
+# cons.price.idx by y boxplot
+
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(x=y,y=cons.price.idx,color=y)) +
+  ggtitle('Consumer Price Index by y Boxplot') 
+
+# cons.conf.idx by y boxplot
+data %>% 
+  ggplot() +
+  geom_boxplot(aes(x=y,y=cons.conf.idx,color=y)) +
+  ggtitle('Consumer Confidence Index by y Boxplot') 
+
+# 4.B.ii
+
+# Aggregate of duration by y 
+
+aggregate(duration~y, summary, data = data)
+
+# Aggregate of emp.var.rate by y 
+
+aggregate(emp.var.rate~y, summary, data = data)
+
+# Aggregate of cons.price.idx by y 
+
+aggregate(cons.price.idx~y, summary, data = data)
+
+# Aggregate of cons.conf.idx by y 
+
+aggregate(cons.conf.idx~y, summary, data = data)
+
+```
+## Bank client data Exploring relation among Numeric variables and Target Variable & Numeric variables  
+
+* From the correlation matrix and pairs.panels() analysis it can be observed that:
+  1. pdays (number of days passed from the last contact) has a positive correlation with number of employees (0.47), employment variation rate (0.33) and euribor 3 month rate (0.39).
+  2. Euribor3m has very strong positive correlation with employment variation rate (0.96) and number of employees (0.87). In fact, euribor3m, emp.var.rate, and nr.employed all are highly correlated with each other. Seems like there is some some collinearity presents among these three variables, which needs to be tackled when including these variable for any kind of analysis.
+  3. Campaign has some positive correlation with euribor3m (0.18), emp.var.rate (0.19), and nr.employed (0.18).
+  4. Age and duration has no correlation with any of the other numeric variables.
+
+* From the boxplot it can be observed that:
+  1. Clients who had longer contact duration (in secs) seems to have subscribed a certificate term deposit. Clients who subscribed a certificate term deposit have a wide range or distribution of contact duration in secs with multiple outliers. Median contact duration of the clients who subscribed a certificate term deposit is higher than the median contact duration of the clients who did not subscribe a certificate term deposit.
+  2. Median employment variation rate is lower when clients subscribed a certificate term deposit than the median employment variation rate when clients did not subscribed a certificate term deposit. Employment variation rate has a wide range or distribution when clients did not subscribe a certificate term deposit in compare to the when clients did subscribe a certificate term deposit. Contact duration distribution when clients subscribed a certificate term deposit is highly right skewed and contact duration distribution when clients did not subscribe a certificate term deposit is highly left skewed and it does not go beyond value of 1.4.
+  3. Median consumer price index is lower when clients subscribed a certificate term deposit than the median consumer price index when clients did not subscribe a certificate term deposit. Consumer price index has a wider range or distribution when clients subscribed a certificate term deposit than the consumer price index when clients did not subscribe a certificate term deposit. Consumer price index when the clients subscribed a certificate term deposit is slightly right skewed and consumer price index when the clients did not subscribe a certificate term deposit is highly left skewed.
+  4. Median consumer confidence index is higher when clients subscribed a certificate term deposit than the median consumer confidence index when clients did not subscribe a certificate term deposit. Consumer confidence index has a wider range or distribution when clients subscribed a certificate term deposit than the consumer confidence index when clients did not subscribe a certificate term deposit. Consumer confidence index when the clients did not subscribe a certificate term deposit is highly right skewed.
+  
+* From the aggregate summary it can be observed that:
+  1. The minimum, 1st quartile, median, mean, 3rd quartile, and maximum contact duration (in secs) data distribution is higher for the clients subscribed a certificate term deposit than that of the clients who did not subscribe a certificate term deposit. 
+  2. There is no difference in minimum, maximum, and 1st quartile in employment variation rate data distribution for the clients who did or did not subscribe a certificate term deposit. However, median, mean, and 3rd quartile are higher in employment variation rate data distribution when the clients did not subscribe a certificate term deposit. 
+  3. There is no difference in minimum, 1st quartile, median, mean, 3rd quartile, and maximum consumer price index data distribution when the clients did  or did not subscribe a certificate term deposit. 
+  4. There is no difference in minimum, 3rd quartile, and maximum consumer price index data distribution when the clients did  or did not subscribe a certificate term deposit. However, 1st quartile is lower,and  mean and median are higher in consumer price index distribution when clients did subscribe a certificate term deposit.   
+
+# References
+
+* http://www3.dsi.uminho.pt/pcortez/bib/2014-dss.txt
+* http://dx.doi.org/10.1016/j.dss.2014.03.001
+
