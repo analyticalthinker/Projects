@@ -1,0 +1,366 @@
+---
+title: "Decision Tree Classification and Evaluation"
+author: "Prabhudatta Mohapatra"
+date: "October 17, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Libraries
+```{r Importing Libraries, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(caret)
+library(C50)
+library(rminer)
+```
+
+# Task I: Decision Tree
+
+## Part 1: Setting up WD, importing data, data exploration & transformation
+```{r Seeting working directory, Importing data, Data Exploration, Varaibles Factorization}
+wd<- getwd()
+setwd(wd)
+data <- read.csv("CD_additional_balanced-1.csv", stringsAsFactors = FALSE)
+# Checking data structure
+data %>% str() 
+# Checking missingness
+data %>% summarize(across(everything(), ~ sum(is.na(.)))) 
+#Data Transfornation: Factoring Character Variables
+data<-data %>% mutate(across(c(job, marital, education, default, housing, loan, contact, month, day_of_week, poutcome, y), factor)) 
+# Checking data structure after transformation
+data %>% str()
+# data summary after transformation
+data %>% summary()
+```
+### Data Features
+* There are 9280 observations (rows) and 21 varaibles (columns) in the data set.
+* Variables are in different data type: int (age, duration, campaign, pdays,previous,etc.) and chr (job, marital, eductaion, etc.)
+* All the character variables are converted to factors
+
+## Part 2: Target variable count & percentage of instances
+```{r Count and percentage of instaces of y (target variable)}
+# Count
+table(data$y)
+# Proportions of instances
+prop.table(table(data$y))
+#Percentages of instances
+prop.table(table(data$y)) * 100
+```
+It is a well balanced dataset as the target variable has 50% (YESs) and 50% (NOs)
+
+## Part 3: Data preparation for modeling 
+```{r Data partition: train & test data set}
+# 3.A
+#Setting a random seed
+set.seed(100)
+# Row Index
+inTrain <- createDataPartition(data$y, p=0.7, list=FALSE)
+# Data Partition
+train_data <- data[inTrain,]
+test_data <- data[-inTrain,]
+
+# 3.B
+# Count & Distribution of y in the train data set
+table(train_data$y)
+prop.table(table(train_data$y)) * 100
+# Count & Distribution of y in the test data set
+table(test_data$y)
+prop.table(table(test_data$y)) * 100
+
+```
+### Data Partition
+* Data is divided in to train data set (70% of data) and test data set (30% of data)
+* A random seed of 100 is used to get the same data parition
+* From train and test data y (count & distribution) it can be observed that data is partitioned nicely and target variable(y) proportion is same across the two data sets. In both the train and test data sets y variable is well balanced as it has 50% (YESs) and 50% (NOs).
+
+## Part 4: Decision Tree training
+```{r Traing decisin tree to predict or classify y}
+# 4.A
+tree_cf_1 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.98,earlyStopping = FALSE,noGlobalPruning = FALSE))
+tree_cf_2 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.35,earlyStopping = FALSE,noGlobalPruning = FALSE))
+tree_cf_3 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.12,earlyStopping = FALSE,noGlobalPruning = FALSE))
+tree_cf_4 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.08,earlyStopping = FALSE,noGlobalPruning = FALSE))
+tree_cf_5 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.04,earlyStopping = FALSE,noGlobalPruning = FALSE))
+tree_cf_6 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.025,earlyStopping = FALSE,noGlobalPruning = FALSE))
+tree_cf_7 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.003,earlyStopping = FALSE,noGlobalPruning = FALSE))
+```
+
+*Answer*: Train Data Set is appropriate to pass to the model in the training phase.
+
+### Decision Tree Training
+
+* 7 different decision trees has been built using 7 different confidence factors (CF), such as 0.98, 0.35, 0.12, 0.08, 0.04, 0.025, 0.003).
+* For all the decision trees earlyStopping and noGlobalPruning is set to FALSE.
+* As required last decision tree(tree_cf_7) is built using CF = 0.003 to have less than 10 leaf nodes. It has 8 leaf nodes.
+
+## Part 5: Model Information
+```{r Calculating Number of Leaf Nodes for Decisin Trees}
+# 5.A
+tree_cf_1$size
+tree_cf_2$size
+tree_cf_3$size
+tree_cf_4$size
+tree_cf_5$size
+tree_cf_6$size
+tree_cf_7$size
+```
+### Tree Complexity
+* Tree with the Confidence Factor (CF) 0.98 is the most complex decision trees with 327 leaf nodes each. 
+* Tree with the Confidence Factor (CF) 0.003 is the simplest decision tree with 8 leaf nodes.
+
+5.B
+
+* Most Complex Tree:
+The decision tree with the maximum number of leaf nodes is the most complex one. More leaf nodes indicates that the tree has finer level of granularity and can provide specific decision outcomes. These trees can describe a wide range of classifications, which helps to have a detailed understanding of the data. tree_cf_1 is the most complex tree. It's not easy to interpret complex decision trees.
+
+* Least Complex Tree:
+The decision tree with the minimum number of leaf nodes, is the least complex one. Fewer leaf nodes indicates a more general or coarse-grained set of decision outcomes. These trees are simple to understand and interpret. However, it's possible they have not captured the detailed information about the data. tree_cf_7 is the least complex tree.
+
+
+```{r plotting the least complex tree, fig.height=8, fig.width=20}
+# 5.C
+plot(tree_cf_7)
+
+#Summary of the tree
+summary(tree_cf_7)
+```
+
+### Least complex tree plot & Summary
+
+* Least complex tree with 8 leaf nodes has visualized. 
+
+* From the tree plot and summary it can be observed that first split is based on nr.employed(5076.2), next split is based on duration (446), next split is based on month, next split is again based on duration (93), next split is based on cons.price.idx (93.369), next split is based on cons.conf.idx (49.5), last split is based on day of week (fri,mon or thus, tue, wed). 
+
+* From the summary it can be observed that tree has classified incorrectly 851/6496 observations (13.1 %). 
+
+* Node blocks, at the bottom of the tree plot, represent the proportion of target variable (y) instances (Yes/No) after the decision tree is built and leaf nodes are defined. Based on the node majority predicted observation will be assigned a class (Yes/No).   
+
+* Attribute usage represents how features importance in building the decision tree. Most important feature is nr.employed (100%), followed by duration (72.64%), followed by month (48.18%), followed by cons.price.idx (6.30%), followed by cons.conf.idx (5.93%), and day_of_week (4.66%) is the least important feature for decision tree *tree_cf_7*. 
+
+5.D
+
+* Prediction: (nr.employed = 6000 and duration = 500)
+
+1. As the first split is based on nr.employed (number of employees), model will check the if the given case has nr.employed $\leq$ 5076.2 or $\ge$ 5076.2. As the given nr.employed = 6000 it will send the case to duration split. 
+
+2. Decision making at duration (last contact duration in seconds) split is based on if the duration $\leq$ 446 or $\ge$ 446. As the given duration = 500 it will transfer the case to Node 15, where majority of target variable instance is Yes (~ 78.92%). So, the prediction for the client having nr.employed = 6000 and duration = 500 will be classified as **'Yes'** (that this client would subscribe for a certified term deposit).   
+
+## Part 6: Predict on train and test sets with each trained model 
+
+```{r Generating prediction for all the models for both train and test data}
+
+# 6.A
+
+# Train data CF (0.98)
+tree_cf_1_train_predictions <- predict(tree_cf_1,train_data)
+# Train data CF (0.35)
+tree_cf_2_train_predictions <- predict(tree_cf_2,train_data)
+# Train data CF (0.12)
+tree_cf_3_train_predictions <- predict(tree_cf_3,train_data)
+# Train data CF (0.09)
+tree_cf_4_train_predictions <- predict(tree_cf_4,train_data)
+# Train data CF (0.04)
+tree_cf_5_train_predictions <- predict(tree_cf_5,train_data)
+# Train data CF (0.025)
+tree_cf_6_train_predictions <- predict(tree_cf_6,train_data)
+# Train data CF (0.003)
+tree_cf_7_train_predictions <- predict(tree_cf_7,train_data)
+
+# Test data CF (0.98)
+tree_cf_1_test_predictions <- predict(tree_cf_1,test_data)
+# Test data CF (0.35)
+tree_cf_2_test_predictions <- predict(tree_cf_2,test_data)
+# Test data CF (0.12)
+tree_cf_3_test_predictions <- predict(tree_cf_3,test_data)
+# Test data CF (0.09)
+tree_cf_4_test_predictions <- predict(tree_cf_4,test_data)
+# Test data CF (0.04)
+tree_cf_5_test_predictions <- predict(tree_cf_5,test_data)
+# Test data CF (0.025)
+tree_cf_6_test_predictions <- predict(tree_cf_6,test_data)
+# Test data CF (0.003)
+tree_cf_7_test_predictions <- predict(tree_cf_7,test_data)
+```
+
+## Part 7: Confusion matrices for train models
+
+```{r Generating confusion matrices for trained models using test and train data}
+# 7.A
+
+# Train data models
+mmetric(train_data$y, tree_cf_1_train_predictions, metric="CONF")$conf
+mmetric(train_data$y, tree_cf_2_train_predictions, metric="CONF")$conf
+mmetric(train_data$y, tree_cf_3_train_predictions, metric="CONF")$conf
+mmetric(train_data$y, tree_cf_4_train_predictions, metric="CONF")$conf
+mmetric(train_data$y, tree_cf_5_train_predictions, metric="CONF")$conf
+mmetric(train_data$y, tree_cf_6_train_predictions, metric="CONF")$conf
+mmetric(train_data$y, tree_cf_7_train_predictions, metric="CONF")$conf
+# Test data models
+mmetric(test_data$y, tree_cf_1_test_predictions, metric="CONF")$conf
+mmetric(test_data$y, tree_cf_2_test_predictions, metric="CONF")$conf
+mmetric(test_data$y, tree_cf_3_test_predictions, metric="CONF")$conf
+mmetric(test_data$y, tree_cf_4_test_predictions, metric="CONF")$conf
+mmetric(test_data$y, tree_cf_5_test_predictions, metric="CONF")$conf
+mmetric(test_data$y, tree_cf_6_test_predictions, metric="CONF")$conf
+mmetric(test_data$y, tree_cf_7_test_predictions, metric="CONF")$conf
+
+```
+
+## Part 8: Evaluation metrics for each model
+
+```{r Generating evaluation metrics for all models}
+# 8.A
+
+mmetric(train_data$y, tree_cf_1_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(train_data$y, tree_cf_2_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(train_data$y, tree_cf_3_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(train_data$y, tree_cf_4_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(train_data$y, tree_cf_5_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(train_data$y, tree_cf_6_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(train_data$y, tree_cf_7_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_1_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_2_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_3_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_4_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_5_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_6_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+mmetric(test_data$y, tree_cf_7_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+```
+
+### Performace Metrics Dataframe
+```{r Creating a dataframe for evaluation metrics}
+
+# 8.B
+
+train1<-round((mmetric(train_data$y, tree_cf_1_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+train2<-round((mmetric(train_data$y, tree_cf_2_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+train3<-round((mmetric(train_data$y, tree_cf_3_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+train4<-round((mmetric(train_data$y, tree_cf_4_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+train5<-round((mmetric(train_data$y, tree_cf_5_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+train6<-round((mmetric(train_data$y, tree_cf_6_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+train7<-round((mmetric(train_data$y, tree_cf_7_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test1<-round((mmetric(test_data$y, tree_cf_1_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test2<-round((mmetric(test_data$y, tree_cf_2_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test3<-round((mmetric(test_data$y, tree_cf_3_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test4<-round((mmetric(test_data$y, tree_cf_4_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test5<-round((mmetric(test_data$y, tree_cf_5_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test6<-round((mmetric(test_data$y, tree_cf_6_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+test7<-round((mmetric(test_data$y, tree_cf_7_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))),2)
+
+cf_vector <- c(0.98, 0.35, 0.12, 0.08, 0.04, 0.025,0.003)
+leaf_nodes <- c(327, 154, 47, 26, 23, 16, 8)
+
+
+comparision_df1<- as.data.frame(rbind(train1,train2, train3, train4, train5, train6, train7))
+
+colnames(comparision_df1) <- c('train_ACC','train_TPR1','train_TPR2', 'train_Precision1', 'train_Precision2', 'train_F11', 'train_F12') 
+
+comparision_df2<- as.data.frame(rbind( test1, test2, test3, test4, test5, test6, test7))
+
+colnames(comparision_df2) <- c('test_ACC','test_TPR1','test_TPR2', 'test_Precision1', 'test_Precision2', 'test_F11', 'test_F12') 
+
+comparision_df<- as.data.frame(cbind(cf_vector, leaf_nodes, comparision_df1, comparision_df2))
+rownames(comparision_df)<- c('model1', 'model2', 'model3', 'model4', 'model5', 'model6', 'model7')
+
+comparision_df$acc_drop<- comparision_df$train_ACC - comparision_df$test_ACC
+
+comparision_df
+```
+## Part 9: Feature importance
+```{r Calculating feature importance for each decision tree}
+# 9.A
+C5imp(tree_cf_1)
+C5imp(tree_cf_2)
+C5imp(tree_cf_3)
+C5imp(tree_cf_4)
+C5imp(tree_cf_5)
+C5imp(tree_cf_6)
+C5imp(tree_cf_7)
+```
+
+9.B
+
+*Answer*: Top 4 important features in a majority of the models are:
+  
+  1. **duration**
+  
+  2. **nr.employed**
+  
+  3. **month**
+  
+  4. **poutcome**
+
+9.C
+*Answer*: Least 2 important features are:
+  
+  1. **campaign**
+  
+  2. **previous**
+
+## Part 10: Train and Test Accuracy Graph
+
+```{r graph to compare train and test model accuracy}
+ggplot() + 
+  geom_line(aes(x=comparision_df$leaf_nodes,y=comparision_df$train_ACC,color='Train Accuracy')) +
+  geom_line(aes(x=comparision_df$leaf_nodes,y=comparision_df$test_ACC,color='Test Accuracy')) +
+  scale_color_manual(values = c("Train Accuracy" = "red", "Test Accuracy" = "blue")) +
+  ggtitle("Bank Clients Tree Accuracy in Test and Train by # of leaf nodes") + 
+  xlab('Tree Complexity (Leaf Nodes)') +
+  ylab('Accuracy') +
+  ylim(85,100) +
+  geom_vline(xintercept = 7) +
+  geom_text(aes(x=50,y=95),label=' <-Underfitted') +
+  geom_text(aes(x=200,y=95),label='Increasingly Overfitted ->')
+```
+
+# Task II: Reflections
+
+## CF vs. Complexity
+
+```{r Plot for CF vs. Complexity}
+ggplot() + 
+  geom_line(aes(y=comparision_df$cf_vector,x=comparision_df$leaf_nodes)) +
+  ggtitle("Bank Clients Tree Accuracy in Test and Train by # of leaf nodes") + 
+  xlab('Tree Complexity (Leaf Nodes)') +
+  ylab('CF') +
+  ylim(0,1) +
+#  geom_vline(xintercept = 7) +
+  geom_text(aes(x=50,y=0.8),label=' <-Least Complex') +
+  geom_text(aes(x=200,y=0.8),label='Most Complex ->')
+```
+
+* From the above plot (CF vs. Tree Complexity) it can be observed that complexity (number of leaf nodes) increases with higher vaues of CF hyperparameter. So, the lower the CF the less complex the tree is. CF hyperparameter is almost directly proportional with complexity of decision tree.
+
+
+## Best performing Train set
+
+* Decision tree tree_cf_1 (*CF = 0.98*) has the best performance in Train set having accuracy of **94.13%**. It is the most complex decision tree with 327 leaf nodes. However, in the test data set it is not the best performing decision tree having an accuracy of **86.35%**, which means it lost about 7.78% accuracy. 
+
+## Best performing Test set
+
+* Decision tree tree_cf_2 and Decision tree tree_cf_5 both have an accuracy of **88.15%**. However, tree_cf_2 decision tree lost about 3.66% accuracy when comapred to train set and tree_cf_5 decision tree lost only  0.29% accuracy when comapred to train set. So, tree_cf_2 is overfitted in train data set. As, tree_cf_5 decision tree perfomed similarly in both the train and test set it would be considered the best performing model in test set.  tree_cf_5 decision tree is a moderate complex tree with 23 leaf nodes. It performed similarly in train set as there is only 0.29% accuracy drop.
+
+## Relationship between model complexity and performance
+
+* From the above accuracy vs. complexity graph (Part 10) it can be observed that increasing the complexity increases the accuracy up to a point in both Train and Test sets. If tree complexity is increased further, accuracy of Train set improves however, at some point the model becomes overfitted and learns rules that do not generalize to the Testing set. Because in the test data set accuracy increased for a moderate complexity then accuracy remains almost constant for higher complexity and finally accuracy drops down for very high complexity. So, accuracy continues to increase in Train, but actually becomes worse in Test at around 155 leaf nodes and continues to decline as the number of leaf nodes increase. Here it can be concluded that less complex decision tree out performed the more complex decision tree. So, decision tree tree_cf_5 with **23** leaf nodes, train accuracy of **88.44%**, and test accuracy of **88.15%** is the best performing model.
+
+## Model Selection  
+
+* If I have to choose a model, I will select decision tree 'tree_cf_5' with 23 leaf nodes, train accuracy of 88.44%, and test accuracy of 88.15% as this is the best performing model. This tree has the highest test accuracy among the other trees' test accuracies except tree_cf_2, which has the same test accuracy. tree_cf_5 has a well balanced accuracy in test and train data set prediction and does not have any overfitting for test or train set. The accuracy difference is pretty low (0.29). It would be easier to interpret this tree because of less complexity. Let's compare other decision trees to tree_cf_5:
+
+  1. tree_cf_1: It's the most complex tree with 327 leaf nodes, and it would be pretty difficult to interpret the results. Also, in the test set, the model did not perform well (accuracy: 86.35%). Tree is overfitted with the train set as there is an accuracy drop of 7.78 % between test and train set prediction. So, this tree is not selected.
+
+  2. tree_cf_2: Though this tree has same test set accuracy (88.15%) as of tree_cf_5, it is a complex tree with 154 leaf nodes and interpretting the results will be difficult. Also, it has a train set accuracy of 91.09% and overfitted, as  there is an accuracy drop of 3.66 % between test and train set prediction. So, this tree is not selected.
+  
+  3. tree_cf_3: This tree has less test accuracy (88.07%) than tree_cf_5. Tree is overfitted with the train set as there is an accuracy drop of 1.52 % between test and train set prediction. Also, it has 47 leaf nodes, which increases the complexity to interpret the results. So, this tree is not selected.
+  4. tree_cf_4: This tree has less test accuracy (88.11%) than tree_cf_5. It has a train set accuracy of 88.69%, which is better than that of tree_cf_5. However, it has more leaf nodes (26) compared to tree_cf_5 (23) making tree_cf_4 more complex to interpret the results. While choosing between tree_cf_4 & tree_cf_5, we can make a decision based on if we want to have a model which is easier to interpret the results cause there is only a difference of 0.25% in train set accuracy of both the trees. So, this tree is not selected. 
+
+  5. tree_cf_6: Though this tree is less complex (16 leaf nodes) than tree_cf_5, tree_cf_6 has less accuracy in both the train and test set. So, this tree is not selected.  
+
+  6. tree_cf_7: Though this tree is less complex (8 leaf nodes) than tree_cf_5, tree_cf_7 has less accuracy in both the train and test set. So, this tree is not selected.  
+
+ 
