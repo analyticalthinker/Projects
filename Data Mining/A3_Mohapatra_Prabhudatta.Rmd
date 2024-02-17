@@ -1,0 +1,309 @@
+---
+title: "Decision Tree and Naïve Cross-validation"
+author: "Prabhudatta Mohapatra"
+date: "October 24, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Task 1
+## Code Chunk 1: Set up, Data import, and Preparation
+```{r Setting up WD, importing data, EDA, Data Partition (Train & Test), warning=FALSE, message=FALSE }
+# 1.A
+
+# Loading libraries
+library(tidyverse)
+library(caret)
+library(C50)
+library(rminer)
+library(e1071)
+library(matrixStats)
+library(knitr)
+
+# setting up working directory
+wd<- getwd()
+setwd(wd)
+
+#importing data with character varaiables as factor
+data <- read.csv("CD_additional_modified.csv", stringsAsFactors = TRUE)
+
+#data structure
+str(data)
+
+#data summary
+summary(data)
+
+# 1.B
+
+#Setting a random seed
+set.seed(100)
+# Row Index
+inTrain <- createDataPartition(data$y, p=0.7, list=FALSE)
+# Data Partition
+train_data <- data[inTrain,]
+test_data <- data[-inTrain,]
+
+# 1.C
+
+# Distribution of y in the whole data set
+prop.table(table(train_data$y)) * 100
+
+# Distribution of y in the train data set
+prop.table(table(train_data$y)) * 100
+
+# Count & Distribution of y in the test data set
+prop.table(table(test_data$y)) * 100
+```
+ 
+ ### Data Features
+ 
+* There are 4119 observations (rows) and 21 varaibles (columns) in the data set.
+* Variables are in different data type: int (age, duration, campaign, pdays,previous,etc.) and chr (job, marital, eductaion, etc.)
+* All the character variables are converted to factors
+* It is not a well balanced dataset as the target variable has 89.04% (NOs) and 10.96% (YESs)
+* Data is divided in to train data set (70% of data) and test data set (30% of data)
+* A random seed of 100 is used to get the same data parition
+* From whole input data, train and test data y (distribution) it can be observed that data is partitioned nicely and target variable(y) proportion is same across the three data sets. In all the three data sets y variable is distributed similarly, having approx. 89% (NOs) and approx. 11% (YESs).
+
+## Code Chunk 2: Simple Decision Tree Training and Testing
+```{r Training decision tree to predict or classify y, fig.height=8, fig.width=20}
+
+#2.A
+#Decision Tree with a CF = 0.98
+tree_cf_1 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.98))
+tree_cf_1$size
+summary(tree_cf_1)
+
+
+# Train data prediction
+tree_cf_1_train_predictions <- predict(tree_cf_1,train_data)
+# Test data prediction
+tree_cf_1_test_predictions <- predict(tree_cf_1,test_data)
+
+# Confusion matrix for train data prediction
+mmetric(train_data$y, tree_cf_1_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_data$y, tree_cf_1_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_data$y, tree_cf_1_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_data$y, tree_cf_1_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+
+#2.B
+
+# Decision Tree with a CF = 0.25
+tree_cf_2 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.1))
+tree_cf_2$size
+summary(tree_cf_2)
+plot(tree_cf_2)
+
+# Decision Tree with a CF = 0.05
+tree_cf_3 <- C5.0(y~.,train_data,control = C5.0Control(CF= 0.05))
+tree_cf_3$size
+summary(tree_cf_3)
+plot (tree_cf_3)
+
+# Train data prediction
+tree_cf_3_train_predictions <- predict(tree_cf_3,train_data)
+# Test data prediction
+tree_cf_3_test_predictions <- predict(tree_cf_3,test_data)
+
+# Confusion matrix for train data prediction
+mmetric(train_data$y, tree_cf_3_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_data$y, tree_cf_3_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_data$y, tree_cf_3_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_data$y, tree_cf_3_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+```
+
+### Decision Tree
+
+* 3 different decision trees has been built using 3 different confidence factors (CF) 0.98, 0.1, and 0.05 with default setting of C5.0.
+* Decision tree(tree_cf_1) with CF 0.98 has 114 leaf nodes, decision tree(tree_cf_2) with CF 0.1 has 12 leaf nodes, and decision tree(tree_cf_3) with CF 0.05 has 4 leaf nodes, which is the least complex decision tree with best interpretability.
+* Least complex tree with 4 leaf nodes has visualized. 
+  
+    1. From the plot it can be observed that, first decision node is poutcome (success or failure,nonexistent). If success, reaches a leaf node. 
+    2. If failure,nonexistent, decision reaches the next node duration. If duration $\leq$ 414 seconds then reaches a leaf node.
+    3. If duration > 414, decision reaches to the next node nr_employed. Based on rule if nr_employed $\leq$ 5076.2 or > 5076.2 the decision reaches two different leaf nodes.   
+
+* tree_cf_1 (CF = 0.98) classification evaluation (train & test set)
+    1. For tree_cf_1 train set accuracy is 96.29% and train set accuracy is 89.07%. So, the model performed well predicting the train set however, it lost about 7.22% accuracy in test set. So, tree_cf_1 is overfitted in train data set. 
+    2. Train set has a high TPR (98.6%) than the test set (94.27%). Train set has a high Precision (97.27%) than the test set (93.51%).Similary, F1 measure is higher for train set (97.93%) than test set (93.89%). All of these indicate overfitting of model in train set.
+
+* tree_cf_3 (CF = 0.05) classification evaluation (train & test set)
+    1. For tree_cf_3 train set accuracy is 90.92% and train set accuracy is 90.04%. So, the model performed well predicting both the test and train set. There is a very minor accuracy drop as it perfomed similarlt in both test and train data set. So, tree_cf_3 is not overfitted either in test or train data set. 
+    2. Train set has almost same TPR (98.27%) compared to test set (97.82%). Train set has almost same Precision (92.05%) compared to test set (91.57%).Similary, F1 measure is almost same in both train set (95.07%) and test set (94.59%). All of these indicate that model performed well in both the data sets.
+    
+* Comparison between tree_cf_1 and tree_cf_3
+    1. Due to least complexity and easy interpretability tree_cf_3 (4 leaf nodes) is considered the best model among the three decision trees.
+    2. A drop of precision in train set of tree_cf_3 compared to precision in train set of tree_cf_1, explains drops in accuracy of train set in tree_cf_3 compared to tree_cf_1. 
+    3. An increase in TPR of test set in tree_cf_3 compared to the TPR in test set of tree_cf_1, explains increase in accuracy of test set in tree_cf_3 compared to tree_cf_1.  
+ 
+
+## Code Chunk 3: Simple Naïve Bayes Model Training and Testing  
+```{r Training Naïve Bayes to predict or classify y}
+# 3.A
+
+# Naïve Bayes model 
+m1_nb_train <- naiveBayes(y~., train_data)
+m1_nb_train
+
+# Predicting train set
+predicted_m1_train <- predict(m1_nb_train, train_data)
+# Confusin Matrix
+mmetric(train_data$y, predicted_m1_train, metric="CONF")
+# Evaluation Metrics
+mmetric(train_data$y, predicted_m1_train, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+
+# Predicting test set
+predicted_m1_test <- predict(m1_nb_train, test_data)
+# Confusin Matrix
+mmetric(test_data$y, predicted_m1_test, metric="CONF")
+# Evaluation Metrics
+mmetric(test_data$y, predicted_m1_test, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+# 3.B
+
+# Naïve Bayes model (removing one predictor) - (previous) 
+# to improve the true positive rate of the “yes” class of the target variable y
+
+m2_nb_train <- naiveBayes(y~., train_data[,-14])
+m2_nb_train
+
+# Predicting train set
+predicted_m2_train <- predict(m2_nb_train, train_data)
+# Confusin Matrix
+mmetric(train_data$y, predicted_m2_train, metric="CONF")
+# Evaluation Metrics
+mmetric(train_data$y, predicted_m2_train, metric=c("ACC","TPR","PRECISION","F1"))
+
+
+
+# Predicting test set
+predicted_m2_test <- predict(m2_nb_train, test_data)
+# Confusin Matrix
+mmetric(test_data$y, predicted_m2_test, metric="CONF")
+# Evaluation Metrics
+mmetric(test_data$y, predicted_m2_test, metric=c("ACC","TPR","PRECISION","F1"))
+
+```
+
+### Naive Bayes
+
+* With all predcitors:
+    1. Naive Bayes model ml_nb_train is created using all the predictors in the train set. Then the target variable is predicted for both the train and test data. From evaluation metrics, train set accuracy is 87.73% and test set accuracy is 87.29%. 
+    2. It did not perform better than decision tree tree_cf_3.
+    3. Though test set has a better TPR1, it has a low TPR2 compared to train set resulting in a little lower Accuracy for test set prediction. 
+    4. Precision 1 is almost same for both the train and test set as well as F11 and F22 are almost same for both the the train and test set. However, train set precision 2 is better than test set precision 2 resulting higher F12 for train set as compared to the F12 of the test set.   
+
+* Without the 'previous' predictor:
+    1. After multiple trials, it is founded that removing the 'previous' predictor for building the Naive Bayes model to predict y actually increases the TRP of 'Yes' class (TPR2) of y while not affecting the accuracy . Without removing any predictor traint set TPR2 is 61.39% and test set TPR2 is 55.56%. After removing 'previous' train set TPR2 is  65.19% and test set TPR2 is 60.00%.
+    2. From evaluation metrics, train set accuracy is 87.83% and test set accuracy is 87.69%.
+    3. It did not perform better than decision tree tree_cf_3.
+    4. Though test set has a better TPR1, it has a low TPR2 compared to train set resulting in a little lower Accuracy for test set prediction. 
+    5. Precision 1 & 2 are almost same for both the train and test set as well as F11 and F22 are almost same for both the the train and test set.
+
+## Code Chunk 4: Cross-validation Function 
+```{r Creating the cv_function for multiple use}
+# Creating a cv_function 
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  metrics_list <- c("ACC","PRECISION","TPR","F1")
+ 
+ cv_results <- lapply(folds, function(x)
+ { 
+   train <- df[-x,-target]
+   test  <- df[x,-target]
+   
+   train_target <- df[-x,target]
+   test_target <- df[x,target]
+   
+   classification_model <- classification(train,train_target) 
+   
+   pred<- predict(classification_model,test)
+   
+   return(mmetric(test_target,pred,metrics_list))
+ })
+ 
+ cv_results_m <- as.matrix(as.data.frame(cv_results))
+
+ cv_mean<- as.matrix(rowMeans(cv_results_m))
+ 
+ colnames(cv_mean) <- "Mean"
+ 
+ cv_sd <- as.matrix(rowSds(cv_results_m))
+ 
+ colnames(cv_sd) <- "Sd"
+ 
+ cv_all <- as.data.frame(cbind(cv_results_m, cv_mean, cv_sd))
+ 
+ kable(cv_all,digits=2, align=rep('c', 10))
+}
+
+```
+
+## Code Chunk 5: 5-fold and 10-fold C5.0 and naive Bayes evaluation performance with cv_function
+
+```{r using cv_function for k-fold Naive Bayes and C5.0 decision tree models}
+# 5.A
+
+# 10-fold naive bayes
+cv_function(metrics_list =  metrics_list, 
+            df = data, 
+            target = 21, 
+            nFolds = 10, 
+            seed = 123,
+            classification =  naiveBayes)
+# 5-fold naive bayes
+cv_function(metrics_list =  metrics_list, 
+            df = data, 
+            target = 21, 
+            nFolds = 5, 
+            seed = 123,
+            classification =  naiveBayes)
+
+# 10-fold C5.0 Decision Tree (default CF = 0.25)
+cv_function(metrics_list =  metrics_list, 
+            df = data, 
+            target = 21, 
+            nFolds = 10, 
+            seed = 123,
+            classification =  C5.0)
+
+# 5-fold C5.0 Decision Tree (default CF = 0.25)
+cv_function(metrics_list =  metrics_list, 
+            df = data, 
+            target = 21, 
+            nFolds = 5, 
+            seed = 123,
+            classification =  C5.0)
+```
+
+# Task 2: Reflections
+
+  * Three different decision trees have been built (CF= 0.98, 0.1, 0.05) using train data set (hold-out evaluation). Higher the CF higher the complexity of the decision tree. tree_cf_1 has 114 leaf nodes making it most complex tree to interpret having over fitting in train set. tree_cf_2 has 12 leaf nodes, and tree_cf_3 has 4 leaf nodes making it least complex decision tree with easier interpretation. 
+  * In tree_cf_1 there is a drop of 7.22% of in accuracy between train and test set prediction. TPR2 (yes class) is pretty low for both the train and test set, which indicates that model did not do a good job predicting yes class. Also, a very high accuracy of both the train and test set given class (yes/no) imbalance is due to the classifier choose the more common class (No).
+  * In tree_cf_3 there is very little drop in accuracy between train and test set. TPR2 (yes class) is pretty low for both the train and test set, which indicates that model did not do a good job predicting yes class. Similarly, a low precision 2 in both train and test set indicates high false positives (yes) or type-I error. F12 (yes class) is also low for both test and train set as F12 depends on precision and recall of the yes class. The primary issue is the imbalance of target variable y due to which model tries to predict most of the cases in majority class. 
+  * Two naive bayes models habe been created (using train data set) one with all the predictors and another one with removing one predictor 'previous' which can improve the TPR of class 'yes' in both test and train data set prediction. 
+  * Naive bayes model with all predictors has an accuracy of 87.73% in training set and 87.29% in test set. However, both the train and test set TPR (yes) class is low, which indicates that model did not do a good job predicting yes class and imbalance in target variable is also responsible for it.  Similarly, a low precision 2 in both train and test set indicates high false positives (yes) or type-I error. F12 (yes class) is also low for both test and train set as F12 depends on precision and recall of the yes class.  
+  * Naive bayes model without the 'previous' predictor has an train set accuracy of 87.83% and test set accuracy of 87.69%. It has better TPR2 (yes class) than the naive bayes mdel with al predictors. However it's still low due to imbalance in target y.  
+  * 5-fold and 10-fold decision tree models are built using the complete data set. From the evaluation metrics tt can be observed that 10-fold models performed little better than the 5-fold models with an mean accuracy of 90.63% and standard deviation of 1.22. Of the 10-fold models fold1 performed really well with an accuracy of 93.20% which is highest among all the 10 and 5- fold models. Also, fold1 has a very high precision1 of 94.96% and precision2 of 74.29% along with high TPR1 of 97.55% and TPR2 of 57.78%. Fold 1 performed well among all other folds.
+  * 5-fold and 10-fold naive bayes models are built using the complete data set. From the evaluation metrics it can be observed that 10-fold models and the 5-fold models performed similarly. Of all the models fold6 model performed better than all other 10 or 5 fold models with an accuracy of 90.53%, precision1 of 96.86%, precision2 of 54.84%, TPR1 of 92.37%, and TPR2 of 75.56%. 
+  * Comparing all these models it can be concluded that in this case decision tree models performed better than naive bayes models. So, we can use the 10-fold decision tree for prediction and if we want to select a single fold for then we can choose fold1 of the 10-fold decision tree.
