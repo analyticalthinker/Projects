@@ -1,0 +1,303 @@
+---
+title: "Blackbox methods, KNN"
+author: "Prabhudatta Mohapatra"
+date: "November 14, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Task 1: Model Building
+## Code Chunk 1: Package load, data import, inspection, and partitioning
+```{r Setting WD, Loading Packages, Data Import, Data Partition, warning=FALSE, message=FALSE}
+
+# setting up working directory
+wd<- getwd()
+setwd(wd)
+
+# 1.A
+# Loading libraries
+library(rmarkdown)
+library(RWeka)
+library(caret)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tidyverse)
+
+# 1.B (i)
+
+# Importing data with stringsAsFactors = False
+data <- read.csv("NA_sales_filtered.csv", stringsAsFactors = FALSE)
+
+# 1.B (ii)
+
+# Remove the 'Name' variable and created the datafarame
+data <- data[,2:9]
+
+# 1.B (iii)
+
+# transform all character variables to factors except 'Name'
+data <- data %>% mutate(across(c(Platform, Genre, Rating),factor)) 
+
+# 1.B (iv)
+#Setting a random seed
+set.seed(123)
+
+# Row Index
+inTrain <- createDataPartition(data$NA_Sales, p=0.7, list=FALSE)
+
+# Data Partition
+train_target <- data[inTrain,8]
+test_target <- data[-inTrain,8]
+train_input <- data[inTrain,-8]
+test_input <- data[-inTrain,-8]
+
+```
+
+### Data Features
+ 
+  * There are 6345 observations (rows) and 9 variables (columns) in the data set.
+  * Variables are in different data type: int (critic_score, critic_count, user_score, user_count, etc.) and chr (Name, platform, Genre, etc.)
+  * 'Name' variable is removed and all the character variables (Platform, Genre, Rating) are converted to factors
+  * Data is divided in to train data set (70% of data) and test data set (30% of data)
+  * A random seed of 100 is used to get the same data partition
+
+
+## Code chunk 2: Build and evaluate neural network models for numeric prediction
+```{r Preparing MLP models with default setting and with two hiddel layer and learning rate of 0.005}
+# Assigning shortened name for the MultilayerPercentron ANN method in RWeka
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+# metric list
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+# 2.A.i
+# MLP model with default setting
+mlp_model_0<-MLP(train_target ~ .,data = train_input)
+#mlp_model_0
+
+# Training set prediction and model evaluation
+pred_mlp_model_0_train <- predict(mlp_model_0, train_input)
+mmetric(train_target,pred_mlp_model_0_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_mlp_model_0_test <- predict(mlp_model_0, test_input)
+mmetric(test_target,pred_mlp_model_0_test,metrics_list)
+
+
+# 2.A.ii
+# MLP model with two hidden layers and learning rate of 0.005
+mlp_model_1<-MLP(train_target ~ .,data = train_input, control = Weka_control(H='11,11', L = 0.005))
+#mlp_model_1
+
+# Training set prediction and model evaluation
+pred_mlp_model_1_train <- predict(mlp_model_1, train_input)
+mmetric(train_target,pred_mlp_model_1_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_mlp_model_1_test <- predict(mlp_model_1, test_input)
+mmetric(test_target,pred_mlp_model_1_test,metrics_list)
+
+
+```
+
+### MLP Models
+
+  * Multiple MLP models are built such as one with default settings and another one with two hidden (11 nodes each) layers having a learning rate of 0.005. All the evaluation metrics for training and test data prediction are calculated.    
+
+##Code chunk 3: Build and evaluate SVM (ksvm) models for numeric prediction
+```{r Preparing ksvm models with default setting, with laplacedot kernel, and with Cost Value of 5 }
+# 3.A.i
+# ksvm model with default setting
+ksvm_model_0<-ksvm(train_target ~ .,data = train_input)
+ksvm_model_0
+
+# Training set prediction and model evaluation
+pred_ksvm_model_0_train <- predict(ksvm_model_0, train_input)
+mmetric(train_target,pred_ksvm_model_0_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ksvm_model_0_test <- predict(ksvm_model_0, test_input)
+mmetric(test_target,pred_ksvm_model_0_test,metrics_list)
+
+# 3.A.ii
+# ksvm model with kernel function 'laplacedot' and default C value
+
+ksvm_model_1<-ksvm(train_target ~ .,data = train_input,kernel = 'laplacedot')
+ksvm_model_1
+
+# Training set prediction and model evaluation
+pred_ksvm_model_1_train <- predict(ksvm_model_1, train_input)
+mmetric(train_target,pred_ksvm_model_1_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ksvm_model_1_test <- predict(ksvm_model_1, test_input)
+mmetric(test_target,pred_ksvm_model_1_test,metrics_list)
+
+# 3.A.iii
+# ksvm model with C value of 5
+
+ksvm_model_2<-ksvm(train_target ~ .,data = train_input, C = 5)
+ksvm_model_2
+
+# Training set prediction and model evaluation
+pred_ksvm_model_2_train <- predict(ksvm_model_2, train_input)
+mmetric(train_target,pred_ksvm_model_2_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ksvm_model_2_test <- predict(ksvm_model_2, test_input)
+mmetric(test_target,pred_ksvm_model_2_test,metrics_list)
+
+```
+
+### ksvm Models
+
+  * Multiple ksvm models are built such as one with default settings, one with laplacedot kernel, and another one with cost value of 5. All the evaluation metrics for training and test data prediction are calculated.
+
+## Code chunk 4: Build and evaluate knn (IBk) models for numeric prediction
+
+```{r Preparing IBK (KNN) models with default setting, with k of 6, with weighted voting approach, and with automatic selecting K }
+# 4.A.i
+# IBK model with default setting
+ibk_model_0<-IBk(train_target ~ .,data = train_input)
+ibk_model_0
+
+# Training set prediction and model evaluation
+pred_ibk_model_0_train <- predict(ibk_model_0, train_input)
+mmetric(train_target,pred_ibk_model_0_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ibk_model_0_test <- predict(ibk_model_0, test_input)
+mmetric(test_target,pred_ibk_model_0_test,metrics_list)
+
+
+# 4.A.ii
+# IBK model with k = 6
+ibk_model_1<-IBk(train_target ~ .,data = train_input, control = Weka_control(K=6))
+ibk_model_1
+
+# Training set prediction and model evaluation
+pred_ibk_model_1_train <- predict(ibk_model_1, train_input)
+mmetric(train_target,pred_ibk_model_1_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ibk_model_1_test <- predict(ibk_model_1, test_input)
+mmetric(test_target,pred_ibk_model_1_test,metrics_list)
+
+# 4.A.iii
+# IBK model with I = TRUE
+ibk_model_2<-IBk(train_target ~ .,data = train_input, control = Weka_control(K=6, I=TRUE))
+ibk_model_2
+
+# Training set prediction and model evaluation
+pred_ibk_model_2_train <- predict(ibk_model_2, train_input)
+mmetric(train_target,pred_ibk_model_2_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ibk_model_2_test <- predict(ibk_model_2, test_input)
+mmetric(test_target,pred_ibk_model_2_test,metrics_list)
+
+# 4.A.iv
+# IBK model with I = TRUE
+ibk_model_3<-IBk(train_target ~ .,data = train_input, control = Weka_control(K = 100, X=TRUE))
+ibk_model_3
+
+# Training set prediction and model evaluation
+pred_ibk_model_3_train <- predict(ibk_model_3, train_input)
+mmetric(train_target,pred_ibk_model_3_train,metrics_list)
+
+# Test set prediction and model evaluation
+pred_ibk_model_3_test <- predict(ibk_model_3, test_input)
+mmetric(test_target,pred_ibk_model_3_test,metrics_list)
+
+```
+
+### IBk Models
+
+  * Multiple IBk models are built such as one with default settings, one with K value of 6 (nearest neighbors), one with weighted voting approach, and another one with automatic K value selection when provided K values between 1 an 100. It has automatically chosen 10 nearest neighbors for prediction. All the evaluation metrics for training and test data prediction are calculated.
+
+## Code chunk 5: Cross-validation function for numeric prediction models
+
+```{r Preparing the standard CV function}
+
+# 5.A
+cv_function <- function(df, target, nFolds, seedVal, metrics_list, pred_method)
+{
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+
+# The lapply loop
+
+cv_results <- lapply(folds, function(x)
+{ 
+# data preparation:
+
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+  pred_model <- pred_method(train_target ~ .,data = train_input)  
+  pred <- predict(pred_model, test_input)
+  return(mmetric(test_target,pred,metrics_list))
+})
+# 5.B
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+cv_sd <- as.matrix(rowSds(cv_results_m))
+colnames(cv_mean) <- "Mean"
+colnames(cv_sd) <- "Sd"
+cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+kable(t(cv_all),digits=2)
+}
+```
+
+### CV Function
+
+ * A standard CV function is create for K-fold validation and to compute and show each fold wise evaluation metrics along with means and standard deviations of performance over all of the folds.
+
+## Code chunk 6: 3 fold cross-validation of MLP, ksvm and IBk models
+
+```{r 3 fold cross validation of MLP, ksvm, and IBk models}
+# 3-Fold MLP 
+cv_function(data, 8, 3, 123, metrics_list, MLP)
+
+# 3-Fold ksvm 
+cv_function(data, 8, 3, 123, metrics_list, ksvm)
+
+# 3-Fold IBL 
+cv_function(data, 8, 3, 123, metrics_list, IBk)
+
+```
+
+
+### 3-Fold Cross-Validation
+
+ * 3-Fold Cross Validation is calculated using the default settings of MultilayerPerceptron(), ksvm and IBk to perform numeric prediction with the video game sales data and evaluation metrics are generated. 
+
+
+# Task 2: Reflections
+
+  1. **MLP Models:** Model with default settings has $R^{2}$ of 0.34 and 0.31 for training and test data set prediction respectively and MAE of 0.30 and 0.32 and RMSPE of 53.41 and 50.37 for training and test data set prediction respectively. In this model train set prediction is little over fitted. MLP model with two hidden layers has performed better than the model with default settings having better $R^{2}$, MAE, and RMSPE in both training ($R^{2}$: 0.41, MAE: 0.22, RMSPE: 36.78) and test ($R^{2}$: 0.40, MAE: 0.23, RMSPE: 37.89) data set prediction. This model is not over fitted. However, MLP model with two hidden layers is able to explain only about 40% variability in the data set. 
+  
+  2. **ksvm Models:** ksvm model with default settings has $R^{2}$ of 0.49 and 0.41 for training and test data set prediction respectively and MAE of 0.19 and 0.22 and RMSPE of 27.62 and 31.27 for training and test data set prediction respectively. In this model train set prediction is over fitted but the model has performed better than MLP models and able to capture about 49% and 41% variability in training and test data set respectively. ksvm model with laplacedot kernel has performed better than the default setting ksvm model with $R^{2}$ of 0.52 and 0.41 for training and test data set prediction respectively and reduced MAE of 0.18 and 0.21  and reduced RMSPE of 25.26 and 32.3 for training and test data set prediction respectively. However, ksvm model with laplacedot kernel is over fitted in training data set. ksvm model with cost value of 5 has outperformed both the previous MLP models and ksvm models with $R^{2}$ of 0.58 and 0.42 for training and test data set prediction respectively and reduced MAE of 0.17 and 0.21 and reduced RMSPE of 24.38 and 30.57 for training and test data set prediction respectively. Though ksvm model with cost value of 5 is able to explain about 58% and 42% variability in train and test data set, it is over fitted in the training data.    
+  
+  3. **IBk Models:** None of the IBk models has performed better than the ksvm model with cost value of 5. IBk model with default settings is highly over fitted in training data as $R^{2}$ is 0.99 and 0.14 in training and test data set respectively. Default setting is K=1, so it's predicting an observation as itself so $R^{2}$ is about 100%. Using K=6 has improved the IBk model performance but not better than ksvm model with cost value of 5 as it has $R^{2}$ of 0.44 and 0.25 for for training and test data set prediction respectively and MAE of 0.22 and 0.26 and RMSPE of 48.54 and 56.72 for training and test data set prediction respectively. IBk model using 6 inverse distance weighted neighbor did not perform better than ksvm model with cost value of 5 and highly over fitted in training data set. IBk model provided with K values 1 - 100 for auto selection of k has selected or used 10 nearest neighbor for classification however did not perform better than ksvm model with cost value of 5 as it has $R^{2}$ of 0.37 and 0.25 for training and test data set prediction respectively and MAE of 0.24 and 0.27 and RMSPE of 52.06 and 59.12 for training and test data set prediction respectively.     
+
+  4. **3-Fold MLP Model:** This model (with default settings) has a mean $R^{2}$ of 0.27 with a standard deviation of 0.03 and mean RMSPE of 66.71 with a standard deviation of 12.82. Fold 3 has performed better among all the folds with $R^{2}$ of 0.30, MAE 0.27, and RMSPE 53.21, however, it has not out performed the ksvm model with cost value of 5.
+ 
+  5. **3-Fold ksvm Model:** This model (with default settings) has a mean $R^{2}$ of 0.40 with a standard deviation of 0.03 and mean RMSPE of 34.20 with a standard deviation of 2.21. Fold 1 has performed better among all the folds with $R^{2}$ of 0.43, MAE 0.23, and RMSPE 36.73. It performed very similar to the ksvm model with cost value of 5.
+  
+  6. **3-Fold IBk Model:** This model (with default settings) has a mean $R^{2}$ of 0.15 with a standard deviation of 0.01 and mean RMSPE of 85.56 with a standard deviation of 13.24. Fold 3 has performed better among all the folds with $R^{2}$ of 0.15, MAE 0.29, and RMSPE 100.53, however, it has performed worse than both the 3-fold MLP Model and 3-fold IBk Model. 
+  
+*So, among all the models ksvm model with cost value of 5 has performed best in predicting NA_Sales though model has over fitted in the training data set. It is able to explain 42% variability in data.*   
+
+
+
