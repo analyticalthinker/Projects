@@ -1,0 +1,341 @@
+---
+title: "Regression models, model fit and prediction errors"
+author: "Prabhudatta Mohapatra"
+date: "November 01, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# Task 1: Model Building
+## Code Chunk 1: Set up, data import, data exploration, data partitioning, and inspection code
+
+```{r Setting WD, Data Import, EDA, lm modeling, Data Partition, warning=FALSE, message=FALSE}
+# 1.A
+# setting system environment to load RWeka
+#Sys.setenv(JAVA_HOME='C:\\Users\\user\\Downloads\\openjdk-21.0.1_windows-x64_bin\\jdk-21.0.1')
+
+# Loading libraries
+library(rmarkdown)
+library(psych)
+library(rpart)
+library(RWeka)
+library(tidyverse)
+library(caret)
+library(rminer)
+library(matrixStats)
+library(knitr)
+
+# setting up working directory
+wd<- getwd()
+setwd(wd)
+
+#importing data with character variables as character
+data <- read.csv("NA_sales_filtered.csv", stringsAsFactors = FALSE)
+
+#data structure
+str(data)
+
+#data summary
+summary(data)
+
+# transform all character variables to factors except 'Name'
+data <- data %>% mutate(across(c(Platform, Genre, Rating),factor)) 
+
+# 1.B
+pairs.panels(data[,5:9])
+
+# 1.C
+# Removing the 'Name' variable
+data<- data[,2:9]
+
+lm_test<-lm(NA_Sales ~., data = data)
+summary(lm_test)
+
+#1.D
+#Setting a random seed
+set.seed(100)
+# Row Index
+inTrain <- createDataPartition(data$NA_Sales, p=0.7, list=FALSE)
+# Data Partition
+
+train_target <- data[inTrain,8]
+test_target <- data[-inTrain,8]
+train_input <- data[inTrain,-8]
+test_input <- data[-inTrain,-8]
+
+
+#1.E
+summary(train_input)
+summary(test_input)
+```
+
+### Data Features
+ 
+  * There are 6345 observations (rows) and 9 variables (columns) in the data set.
+  * Variables are in different data type: int (critic_score, critic_count, user_score, user_count, etc.) and chr (Name, platform, Genre, etc.)
+  * 'Name' variable is removed and all the character variables (Platform, Genre, Rating) are converted to factors
+  * From the pair.panels diagram for numeric and integer variables it is observed that critic_score is positively related with critic_count, User_count, and NA_Sales and highly correlated with user_score (0.58).NA_Sales is positively correlated with critic_score (0.35), critic_count (0.34), user_score (0.15), user_count (0.27).      
+  * A simple lm model has been built to check the significance of variable for predicting the target (NA_Sales). For each categorical variable (number of factors-1) numbers of dummy variables have been created with first category as the reference. From the model summary it is observed that there are multiple significant variables for predicting NA_Sales such as PlatformDS, PlatformGBA, RatingT, Critic_Score, Critic_Count, etc at the significance level of 0.001. The model did not perform well in predicting NA_Sales as Multiple R-squared is 0.2787, which says that only 27.87% of the variability in the data is explained by the model.
+  * Data is divided in to train data set (70% of data) and test data set (30% of data)
+  * A random seed of 100 is used to get the same data partition
+
+
+
+## Code Chunk 2: lm, rpart and M5P model training and testing
+```{r lm model, rpart model, M5P model, Evaluation metrics}
+
+# 2.A
+
+# lm model
+lm_model<- lm(train_target ~ Platform + Genre + Rating + Critic_Score + Critic_Count + User_Score + User_Count, data = train_input)
+
+
+# rpart model
+rpart_model<- rpart(train_target ~ Platform + Genre + Rating + Critic_Score + Critic_Count + User_Score + User_Count, data = train_input)
+
+
+# M5P model
+M5P_model<- RWeka::M5P(train_target ~ Platform + Genre + Rating + Critic_Score + Critic_Count + User_Score + User_Count, data = train_input)
+
+# 2.B(i)
+
+# lm model summary and details
+#lm_model
+#summary(lm_model)
+
+# rpart model summary and details
+#rpart_model
+#summary(rpart_model)
+
+# M5P model summary and details
+#M5P_model
+#summary(M5P_model)
+
+## 2.B(ii)
+
+# metrics list
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE", "RRSE", "R2")
+
+# lm Train set prediction
+predict_lm_train<- predict(lm_model, train_input)
+mmetric(train_target,predict_lm_train,metrics_list)
+
+# lm Test set prediction
+predict_lm_test<- predict(lm_model, test_input)
+mmetric(test_target,predict_lm_test,metrics_list)
+
+# rpart Train set prediction
+predict_rpart_train<- predict(rpart_model, train_input)
+mmetric(train_target,predict_rpart_train,metrics_list)
+
+# rpart Test set prediction
+predict_rpart_test<- predict(rpart_model, test_input)
+mmetric(test_target,predict_rpart_test,metrics_list)
+
+# M5P Train set prediction
+predict_M5P_train<- predict(M5P_model, train_input)
+mmetric(train_target,predict_M5P_train,metrics_list)
+
+# M5P Test set prediction
+predict_M5P_test<- predict(M5P_model, test_input)
+mmetric(test_target,predict_M5P_test,metrics_list)
+
+
+```
+
+
+### Model Details
+
+  * Using the train data set three models lm, rpart (10 leaf nodes), and M5P (smoothed linear regression, 7 leaf nodes) have been created having the default settings. For each of these  model fit $R^{2}$ and prediction error metrics MAE, MAPE, RAE, RMSE, RMSPE, and RRSE have been calculated. 
+
+## Code Chunk 3: Cross-validation of lm, rpart, and M5P NA_Sales prediction models
+
+```{r cv_function, 5-fold lm model, rpart model, M5P model}
+
+# 3.A
+
+cv_function <- function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+{
+  # create folds
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  # perform cross validation
+  cv_results <- lapply(folds, function(x)
+  { 
+    test_target <- df[x,target]
+    test_input  <- df[x,-target]
+
+    train_target <- df[-x,target]
+    train_input <- df[-x,-target]
+
+    prediction_model <- prediction_method(train_target~.,train_input) 
+    pred<- predict(prediction_model,test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  # generate means and sds and show cv results, means and sds using kable
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Sd"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable(t(cv_all),digits=2)
+}
+
+# 3.B
+
+df <- data
+target <- 8
+nFolds <- 5
+seedVal <- 123
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+# 5-fold lm models
+assign("prediction_method", lm)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+
+# 5-fold rpart models
+assign("prediction_method", rpart)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+# 5-fold M5P models
+assign("prediction_method", M5P)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+```
+
+### 5-fold Models:
+  * A function is created to implement k-fold validation and regression related metrics calculation.
+  * 5-fold cross-validation for lm, rpart, and M5P has been developed and metrics for explanatory power ($R^{2}$ ) and predictive power ( MAE, RMSE, MAPE, RMSPE, RAE, and RRSE) have been calculated.
+
+
+## Code Chunk 4: Improve the models by adding a quadratic term of Critic_Score
+
+```{r Adding quadratic term, lm test, 5-fold cross-validation results of the lm, rpart, and M5P models}
+
+# 4.A: Create and add the quadratic term of Critic_Score
+data$Critic_Score_Squared <- data$Critic_Score^2
+
+# 4.B: Building an lm model using the whole data set 
+lm_test_qt <- lm(NA_Sales ~ Platform + Genre + Rating + Critic_Score + Critic_Score_Squared + Critic_Count + User_Score + User_Count, data = data)
+
+summary(lm_test_qt)
+
+# 4.C: 5-fold cross-validation results of the lm, rpart, and M5P models with Critic_Score_Squared
+
+df <- data
+target <- 8
+nFolds <- 5
+seedVal <- 123
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+# 5-fold lm models
+assign("prediction_method", lm)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+
+# 5-fold rpart models
+assign("prediction_method", rpart)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+# 5-fold M5P models
+assign("prediction_method", M5P)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+```
+
+### 5-fold Models with Quadratic Term (Critic_Score)
+
+ * An quadratic term Critic_Score_Squared is created from squared value of Critic_score and added to all the 5-fold models (lm, rpart, and M5P). Metrics for explanatory power ($R^{2}$ ) and predictive power ( MAE, RMSE, MAPE, RMSPE, RAE, and RRSE) have been calculated for all of the models/folds.   
+
+## Code Chunk 5:Improve the models with the log term of User_Count
+
+```{r log transformation of user_count, checking significance, 5-fold cross-validation results of the lm, rpart, and M5P models}
+
+# 5.A: Create and add natural log transformation of User_Count-log_User_Count
+
+# removing User_Count and quadratic term of Critic_Score
+data_log_uc<- data[,-c(7,9)]
+
+# creating log transformed User_Count
+data_log_uc$log_User_Count <- log(data$User_Count)
+
+# 5.B 
+
+# lm model with log user count
+lm_log_uc<- lm(NA_Sales ~ Platform + Genre + Rating + Critic_Score + Critic_Count + User_Score + log_User_Count, data = data_log_uc)
+
+#summary of lm model with log user count
+summary(lm_log_uc)
+
+# 5.C
+
+df <- data_log_uc
+target <- 7
+nFolds <- 5
+seedVal <- 123
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+# 5-fold lm models
+assign("prediction_method", lm)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+
+# 5-fold rpart models
+assign("prediction_method", rpart)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+# 5-fold M5P models
+assign("prediction_method", M5P)
+cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+
+```
+
+
+### 5-fold Models with Log Transformed Term (User_Count)
+
+ * A log term log_User_Count is created from log value of User_Count and added to all the 5-fold models (lm, rpart, and M5P). Metrics for explanatory power ($R^{2}$ ) and predictive power ( MAE, RMSE, MAPE, RMSPE, RAE, and RRSE) have been calculated for all of the models/folds. 
+
+# Task 2: Reflections
+
+ *  Simple Models (without 5-fold cross validation)
+ 
+      1. lm_model prediction in train set has a $R^{2}$ value of 0.2700 and in test set has a $R^{2}$ value of 0.2950 which means this model is able to explain only 27% of the variability in the train data set and 29.50% variability in the test data set. Similarly rpart_model prediction in train set has a $R^{2}$ value of 0.3485 and in test set has a $R^{2}$ value of 0.3158 which means this model is able to explain only 34.85% of the variability in the train data set and 31.58% variability in the test data set.Finally, M5P_model prediction in train set has a $R^{2}$ value of 0.4581 and in test set has a $R^{2}$ value of 0.4311 which means this model is able to explain 45.81% of the variability in the train data set and 43.11% variability in the test data set. Looking at the $R^{2}$ values it can be concluded that among these three model M5P_model has highest data explanatory power. 
+      
+      2. Comparing the RMSE for different models M5P_model has the best (lowest) RMSE for both the train and test data set 0.3661 and 0.3684 respectively. Lowest RMSE shows a better fit between the model and train and test data.
+      
+      3. Comparing the RMSPE for different models M5P_model has the best (lowest) RMPSE for both the train and test data set 50.81 and 41.32 respectively. Lowest RMSPE shows a better fit between the model and train and test data.
+ 
+ *  Models with 5-fold cross validation
+     
+     1. Comparing all the models (lm, rpart, M5P) and all the folds (1 through 5) it is observed that fold 1 of M5P model has the highest $R^{2}$ of 0.41, however, it is less than both the train and test set $R^{2}$ of M5P model 0.4581 and 0.4311 respectively. Fold 4 of 5-fold lm model has the highest $R^{2}$ of 0.3 and fold 2 of 5-fold rpart model has the highest $R^{2}$ of 0.3. So, of the 5-fold models M5P model has better data explanatory power.
+     
+     2. Comparing RMSE for all the models it can be observed that M5P models have lower RMSE with Fold1 and 3 have the lowest RMSE of 0.38, however, it is higher than both the train and test set RMSE of M5P model 0.3661 and 0.3684 respectively. A lower RMSE shows that model's predictions are closer to the actual values. A smaller RMSE indicates a better fit between the model and the data.
+     
+     3. Comparing RMSPE for different models it can be observed that M5P models have lower RMPSE with Fold4 has the lowest RMSPE of 44.18, however, it is higher than the test set RMPSE of M5P model 41.32. Among the 5-fold CV models M5p model performed relatively better.
+     
+ *  Models with 5-fold cross validation and quadratic term (Critic_Score_Squared)
+    
+    1. By adding a quadratic term lm model (fold 4) did improve with $R^{2}$ of 0.32, and RMSE of 0.41, however, RMPSE increased.
+    
+    2. Similarly, by adding a quadratic term in rpart models, it did not improve any thing.
+    
+    3. Also, adding a quadratic term in M5P models some of the models did improve but not distinguished. Fold 4 has an improved $R^{2}$ of 0.40, RMSE of 0.38, and RMSPE of 41.65.
+   
+ *  Models with 5-fold cross validation and log transformed term (log_User_Count)
+ 
+    1. Adding the log transformed term did improve the lm models. Of all the folds, Fold 4 has a $R^{2}$ of 0.38 and RMSE of 0.39 however RMSPE increased to 56.34. Comparing to other 5-fold cross validation models having log transformed term it has less explanatory and predictive power. 
+    
+    2. In the contrast, adding the log transformed term did not improve the rpart model at all.   
+    
+    3. Adding the log transformed term did improve the M5P models. Of all the folds, Fold 4 has a $R^{2}$ of 0.44, RMSE of 0.37, and RMSPE of 44.20. Also, it did perform better than the simple M5P model built with hold-out evaluation model which has train set $R^{2}$ of 0.4581 but a test set $R^{2}$ of 0.4311 with RMSE of 0.3661 (train set) and 0.3684 (test set) and RMSPE of 50.81 (train set) and 41.32 (test set).
+
+*So, among all the models created original M5P model built with log transformed term (log_User_Count) has the best explanatory and predictive power. Also, in different type of modeling M5P models performed (better explanatory and predictive power) better than lm and rpart models.* 
+    
+
+
+
