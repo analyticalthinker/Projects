@@ -1,0 +1,216 @@
+---
+title: "A6: Clustering and Association Rule Mining"
+author: "Prabhudatta Mohapatra"
+date: "November 28, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# Task I
+## Code chunk 1: Load packages, prepare and inspect the data
+```{r fig.height=10, fig.width=22, message=FALSE, warning=FALSE}
+# setting up working directory
+wd<- getwd()
+setwd(wd)
+
+# 1.A
+# Loading libraries
+library(knitr)
+library(kernlab)
+library(rJava)
+library(RWeka)
+library(rpart)
+library(rpart.plot)
+library(tidyverse)
+library(caret)
+library(C50)
+library(rminer)
+library(e1071)
+library(matrixStats)
+library(arules)
+library(arulesViz)
+library(tidyverse)
+library(psych)
+
+# Importing data with stringsAsFactors = False
+data <- read.csv("Walmart_visits_7trips.csv", stringsAsFactors = FALSE)
+
+# structure of the input file
+str(data)
+
+# transform all categorical variables to factors
+data <- data %>% mutate(across(c(TripType,DOW),factor))
+
+# summary of the input file
+summary(data)
+
+# 1.B
+# Correlation Analysis
+pairs.panels(data)
+
+#1.C
+#Decision Tree with a CF = 0.98
+tree_cf_1 <- C5.0(TripType~.,data,control = C5.0Control(CF= 0.16))
+tree_cf_1$size
+summary(tree_cf_1)
+
+tree_cf_1_predictions <- predict(tree_cf_1,data)
+
+# Confusion matrix for train data prediction
+mmetric(data$TripType, tree_cf_1_predictions, metric="CONF")$conf
+#mmetric(data$TripType, tree_cf_1_predictions, metric = c("ACC","TPR","PRECISION","F1"))
+
+# C5.0 Tree Plot
+plot(tree_cf_1)
+```
+
+### Data Exploration & Decision Tree
+  * Walmart Visit data has information about 12734 visits along with other details such as visit day of week, unique items purchased in that visit, total quantity etc.
+  * Categorical variables are converted to factors.  
+  * Data structure and summary has been displayed.
+  * From the correlation analysis it can be observed that UniqueItems is highly  correlated with NetQty and UniqDepts having correlation of 0.97 and 0.89 respectively. UniqDept is highly  correlated with TotalQty and NetQty having correlation of 0.87 and 0.86 respectively. UniqueItems is highly correlated with TotalQty and NetQty having correlation of 0.98 and 0.97 respectively.   
+  * A decision tree (C5.0) is built with 8 leaf nodes using CF of 0.16.  
+
+## Code chunk 2: SimpleKMeans clustering to understand visits
+
+```{r SimpleKMeans clustering to understand visits}
+# 2.A
+# Unique TripType number
+TripType.levels <-length(unique(data$TripType))
+# removing TripType
+cdata<- data[,2:9]
+
+# 2.B
+# Cluster with default (random) initial cluster assignment and the default distance function (Euclidean)
+kmeans1 <- SimpleKMeans(cdata,  Weka_control(N=TripType.levels, init = 0, V=TRUE))
+kmeans1
+
+# 2.C
+#  Cluster with number of clusters = TripType.levels, the distance = Euclidean distance, and initial cluster assignment is Kmeans++ method
+kmeans2 <- SimpleKMeans(cdata, Weka_control(N=TripType.levels, init = 1, V=TRUE))
+kmeans2
+
+# 2.D
+#Clustering with number of cluster = TripType.levels, initial cluster assignment is Kmeans++ method, and the distance = "weka.core.ManhattanDistance"
+kmeans3 <- SimpleKMeans(cdata, Weka_control(N=TripType.levels, init = 1, V= TRUE, A = "weka.core.ManhattanDistance"))
+kmeans3
+
+# 2.E
+# Clustering with number of cluster = 5, random initial cluster assignment, and distance = "weka.core.ManhattanDistance"
+kmeans4<- SimpleKMeans(cdata, Weka_control(N=5, init = 0, V= TRUE, A = "weka.core.ManhattanDistance"))
+kmeans4 
+
+# Clustering with number of cluster = 5, initial cluster assignment is Kmeans++ method, and distance = "weka.core.ManhattanDistance"
+kmeans5<- SimpleKMeans(cdata, Weka_control(N=5, init = 1, V= TRUE, A = "weka.core.ManhattanDistance"))
+kmeans5 
+```
+
+### Kmeans clustering
+  * Multiple Kmeans clustering has been built and standard deviations and the centroids of the clusters has been calculated:
+    1. Cluster with default (random) initial cluster assignment and the default distance function (Euclidean)
+    2. Cluster with 7 clusters, Euclidean distance, and initial cluster assignment method is Kmeans++ 
+    3. Cluster with 7 clusters, initial cluster assignment method is Kmeans++ and distance is weka.core.ManhattanDistance
+    4. Cluster with 5 clusters, random initial cluster assignment, and distance is weka.core.ManhattanDistance
+    5. Cluster with 5 clusters, initial cluster assignment method is Kmeans++, and distance is weka.core.ManhattanDistance
+
+## Code Chunk 3: Market Basket Analysis
+
+```{r Market Basket Analysis, Exploring transaction data, building association rules}
+# 3.A
+# Import data
+Dept_baskets<- read.transactions("Walmart_baskets_1week.csv", format="single", sep = ",", header = TRUE, cols=c("VisitNumber","DepartmentDescription"))
+
+summary(Dept_baskets)
+
+# 3.B
+# Inspect first 15 transactions
+inspect(Dept_baskets[0:15])
+
+# 3.C
+# ItemFrequencyPlot of most frequent 15 items in descending order of transaction frequency
+itemFrequencyPlot(Dept_baskets,topN = 15,type='relative', cex.names = 0.7, main="15 Most Frequent Department Frequency Plot")
+
+# 3.D.i
+# buidling apriori rules (50-100)
+mba_rules1<- apriori(Dept_baskets,parameter = list(support = 0.04, confidence = 0.5, minlen = 2))
+# number of rules - 86
+mba_rules1
+# rules summary
+summary(mba_rules1)
+#Rules in descending order of lift
+inspect(sort(mba_rules1, by = "lift"))
+
+# 3.D.ii
+# buidling apriori rules (100-200)
+mba_rules2<- apriori(Dept_baskets,parameter = list(support = 0.035, confidence = 0.5, minlen = 2))
+# number of rules - 130
+mba_rules2
+# rules summary
+summary(mba_rules2)
+#Rules in descending order of lift
+inspect(sort(mba_rules2, by = "lift"))
+```
+
+### Market Basket Analysis
+ * Walmart department basket data has imported with 2000 transactions which has a density of 0.0508. Most frequent department is DSD Grocery. There are 693 transactions with items purchased from only one department and there are 2 transactions with items purchased from 17 departments.
+ * Apriori rules have been built having 86 association rules and 130 association rules and sorted ascending by lift.
+ * Top 15 transactions have been shown and frequency plot for top 15 most frequent departments has been built.
+
+# Task II
+
+  * **Decision Tree:**
+ 
+    1. A decision tree has with 8 leaf nodes has been built to predict 7 different types of Walmart visit. 
+    2. Decision tree's first decision node is based on the rule if NetQty is greater than 3 or not and rest of the decision nodes have used  UniqueItems, UniqDepts, and TotalQty for pruning the tree to a leaf node. NetQty has a 100% attribute usage while TotalQty has only 3.21% attribute usage.
+    3. Decision tree is built with using the whole data set and then used to predict the whole data. It has an accuracy rate of 60.36%. From the confusion matrix it can be observed that a lot of type 5 visits are misclassified as type 8 (763) and type 39 (246) visits. Similarly, a lot of type 7 visits are misclassified as type 8 (674) and type 39 (522) visits. Type 9 visits are mostly misclasified as type 8. Finally, decision tree did a decent job in classifying type 8, 39, 40, and 999 visits. This decision tree kind of considered type 8 and 39 visits as majority classes and tried to classify most of the visits in this type of visit. 
+    
+ * **K-means Clustering:**
+     
+     **1. Cluster with default (random) initial cluster assignment, the default distance function (Euclidean), and 7 clusters:** 
+     * Cluster 3 has highest (2838) number of visits and cluster 1 has least (795) number of visits.
+     * Number of iterations 14 and within cluster sum of squared errors is 3983.33.
+     * Cluster 6 is of visits with most number of UniqueItems and cluster 3 is of visits with least number of UniqueItems.
+     * Cluster 6 is of visits with most number of Total Quantity and cluster 3 is of visits with least number of Total Quantity.
+     * Cluster 6 is of visits with most number of Net Quantity and cluster 3 is of visits with least number of Net Quantity.
+     * Cluster 6 is of visits with most number of Unique Departments and cluster 3 is of visits with least number of Unique Departments.  
+     * Cluster 6 is of visits with most number of OneItemDepts and cluster 3 is of visits with least number of OneItemDepts.
+     
+     **2. Cluster with 7 clusters, Euclidean distance, and Kmeans++ initial cluster assignment:**
+     * Cluster 1 has highest (2418) number of visits and cluster 6 has least (356) number of visits.
+     * Number of iterations 22 and within cluster sum of squared errors is 4012.51.
+     * Cluster 6 is of visits with most number of UniqueItems and cluster 1 is of visits with least number of UniqueItems.
+     * Cluster 6 is of visits with most number of Total Quantity and cluster 4 is of visits with least number of Total Quantity.
+     * Cluster 6 is of visits with most number of Net Quantity and cluster 4 is of visits with least number of Net Quantity.
+     * Cluster 6 is of visits with most number of Unique Departments and cluster 4 is of visits with least number of Unique Departments.  
+     * Cluster 6 is of visits with most number of OneItemDepts and cluster 4 is of visits with least number of OneItemDepts.
+     
+     **3. Cluster with 7 clusters, Manhattan distance, and Kmeans++ initial cluster assignment:**
+     * Cluster 3 has highest (2561) number of visits and cluster 6 has least (1070) number of visits.
+     * Number of iterations 15 and within cluster sum of squared errors is 6719.91.
+     * Cluster 6 is of visits with most number of UniqueItems and cluster 3 is of visits with least number of UniqueItems.
+     * Cluster 6 is of visits with most number of Total Quantity and cluster 3 is of visits with least number of Total Quantity.
+     * Cluster 6 is of visits with most number of Net Quantity and cluster 3 is of visits with least number of Net Quantity.
+     * Cluster 6 is of visits with most number of Unique Departments and cluster 3 & 4 are of visits with least number of Unique Departments.  
+     * Cluster 6 is of visits with most number of OneItemDepts.
+    
+     **4. Cluster with 5 clusters, Manhattan distance, and random initial cluster assignment:**
+     * Cluster 1 has highest (2987) number of visits and cluster 2 has least (2158) number of visits.
+     * Number of iterations 5 and within cluster sum of squared errors is 7533.17.
+     * Cluster 1 is of visits with most number of UniqueItems.
+     * Cluster 1 is of visits with most number of Total Quantity and cluster 3 is of visits with least number of Total Quantity.
+     * Cluster 1 is of visits with most number of Net Quantity and cluster 3 is of visits with least number of Net Quantity.
+     * Cluster 1 is of visits with most number of Unique Departments.  
+     
+ * **Market Basket Analysis:**
+   1. The data set has 2000 transaction and 66 columns (departments). Most frequent department is "DSD Grocery" with 612 occurrences. There are 613 transactions that have items from one department only and there are 2 transactions that have items from 17 departments. 
+   2. A set of apriori rules (86 association rules) have been built with support of 0.04, confidence of 0.5, and minlen of 2.  
+   3. After sorting the rules in ascending order for lift, in the rule with highest lift {DAIRY, DSD GROCERY, PRODUCE} make up the antecedent (premise) of the rule and {COMM BREAD} make up the consequent of the rule. The support 0.0405 is the proportion of transactions that contain both the antecedent and consequent items. It measures the frequency of the rule in the data set. Confidence of 0.57 is the conditional probability of the consequent given the antecedent. It measures how often the rule is correct. Coverage of 0.071 is the proportion of transactions that contain the antecedent items. It indicates how widely the antecedent items are distributed in the data set. Lift of 5.47 measures the ratio of the observed support to the expected support under the assumption of independence. A lift (5.47) greater than 1 suggests a very positive association. The count of 81 is the number of transactions in the data set that satisfy both the antecedent and consequent conditions. So, it suggests that if a transaction includes items from  {DAIRY, DSD GROCERY, PRODUCE} departments then it mostly includes items from {COMM BREAD} department as well. Similarly, next highest association rule suggests that if a transaction includes items from  {DAIRY, GROCERY DRY GOODS, PRODUCE} departments then it mostly includes items from {COMM BREAD} department as well.
+   4. Another set of apriori rules (130 association rules) have been built with support of 0.035, confidence of 0.5, and minlen of 2.  
+   3. After sorting the rules in ascending order for lift, in the rule with highest lift {DAIRY, DSD GROCERY, GROCERY DRY GOODS, PRODUCE} make up the antecedent (premise) of the rule and {COMM BREAD} make up the consequent of the rule. The support 0.038 is the proportion of transactions that contain both the antecedent and consequent items. It measures the frequency of the rule in the data set. Confidence of 0.64 is the conditional probability of the consequent given the antecedent. It measures how often the rule is correct. Coverage of 0.059 is the proportion of transactions that contain the antecedent items. It indicates how widely the antecedent items are distributed in the data set. Lift of 6.13 measures the ratio of the observed support to the expected support under the assumption of independence. A lift (6.13) greater than 1 suggests a very positive association. The count of 76 is the number of transactions in the data set that satisfy both the antecedent and consequent conditions. So, it suggests that if a transaction includes items from  {DAIRY, DSD GROCERY, GROCERY DRY GOODS, PRODUCE} departments then it mostly includes items from {COMM BREAD} department as well. Similarly, next highest association rule suggests that if a transaction includes items from  {DAIRY, DSD GROCERY, PRODUCE} departments then it mostly includes items from {COMM BREAD} department as well.
+
+  *Higher support indicates that the rule is applicable to a larger portion of the data set. Higher confidence indicates a higher likelihood that the rule is correct. A lift significantly greater than 1 suggests a strong positive association between the antecedent and consequent. A higher count indicates more occurrences of the rule in the data set.*
+
+     
