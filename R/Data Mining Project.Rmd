@@ -1,0 +1,592 @@
+---
+title: "A7: Project Assignment"
+author: "Prabhudatta Mohapatra"
+date: "December 05, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# Task 0: Importing Data and Summary
+
+```{r  Setting WD, Loading Libraries, Import Data, warning=FALSE, message=FALSE}
+# setting up working directory
+wd<- getwd()
+setwd(wd)
+
+# loading required libraries
+library(knitr)
+library(rmarkdown)
+library(matrixStats)
+library(tidyverse)
+library(dplyr)
+library(psych)
+library(rJava)
+library(RWeka)
+library(rminer)
+library(scatterplot3d)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(C50)
+library(e1071)
+library(kernlab)
+library(dlookr)
+
+# Importing data with stringsAsFactors = False
+data <- read.csv("census.csv", stringsAsFactors = FALSE)
+```
+
+  
+# Task I: EDA
+
+```{r EDA, Data Transformation, warning=FALSE, message=FALSE}
+
+# structure of the input file
+str(data)
+
+# checking first 10 observations
+data %>% head(10)
+# checking last 10 observations
+data %>% tail(10)
+
+
+#summary
+summary(data)
+
+# Categorical Variables 
+table(data$workclass)
+table(data$education)
+table(data$education.num)
+table(data$occupation)
+table(data$relationship)
+table(data$race)
+table(data$sex)
+table(data$native.country)
+table(data$y)
+
+# checking missing values
+data %>% summarize(across(everything(), ~ sum(is.na(.))))
+
+#Checking correlation whole data 
+pairs.panels(data)
+
+#checking categorical variables
+prop.table(table(data$y, data$workclass))
+prop.table(table(data$y, data$education))
+prop.table(table(data$y, data$marital.status))
+prop.table(table(data$y, data$race))
+prop.table(table(data$y, data$sex))
+prop.table(table(data$y))
+# Checking data distribution and normality 
+data %>% select(age, fnlwgt, capital.gain, capital.loss, hours.per.week) %>% plot_normality()
+
+data %>%  ggplot(aes(x = y, y=age)) + geom_boxplot() + ggtitle('boxplot of Age')
+data %>%  ggplot(aes(x = y, y=fnlwgt)) + geom_boxplot() + ggtitle('boxplot of fnlwgt')
+data %>%  ggplot(aes(x = y, y=capital.gain)) + geom_boxplot() + ggtitle('boxplot of capital.gain')
+data %>%  ggplot(aes(x = y, y=capital.loss)) + geom_boxplot() + ggtitle('boxplot of capital.loss')
+
+# plot for age and hours.per.week stratified by sex
+data %>% ggplot() + geom_point(aes(x = age,y=hours.per.week, color = sex)) + ggtitle("Age Vs. Hour.Per.Week by Sex")
+```
+## Data Features
+ 
+  * There are 32561 observations (rows) and 15 variables (columns) in the data set.
+  * Variables are in different data type: int (age, fnlwgt, eductaion.num, capital.gain, etc.) and chr (workclass, education,education, marital.status, occupation, etc.)
+  * It is observed that each character variable has leading blank space for data points.
+  * There are multiple '?' special character present through out the column workclass, occupation, and native country.
+  * Target variable is if someone has salary more than 50K or less than 50K. So, it is a categorical variable and binary classification models will be created. There are 24720 observations having less than 50K salary and 7841 observations having more than 50k salary. So, 75.92% of observations have salary less than 50K and 24.08% of observations have salary more than 50K. 
+  * There is no missing value across the data set
+  * List of the supervised models **appropriate** to use for the task in this project (classification):
+    1. Decision Tree (C5.0)
+    2. Recursive partitioning for classification (rpart)
+    3. Naïve Bayes (naiveBayes)
+    4. Support Vector Machines (ksvm)
+    5. Multi-Layer Perceptrons (MLP)
+  * List of the supervised models **not** appropriate to use for the task in this project (classification):
+    1. Liner Regression (lm)
+    2. M5 (regression) model trees (M5P)
+  * Education and Education.num represents same thing. Only of these variables can be used in classification model.  
+  * Very low percentage of women are getting salary above >=50K.
+  * From the boxplot of Age, median age of people getting more than 50K salary is higher than age of the people getting less than 50K salary. Also, range of age for people getting less than 50K is higher than range of age of people getting more than 50K salary.
+  * From the boxplot of fnlwgt, median fnlwgt of people getting more than 50K salary is alomost same as fnlwgt of the people getting less than 50K salary.
+  * From the boxplot of capital.gain and capital.loss it can be observed that most of the values are zero. There is an extreme outlier for the salary more than 50K in capital gain. 
+  * From the scatter plot it can be observed that more males are working more than 40 hours per week as compared to the females.
+  * From the pair.panels plot no significant correlation between numeric variables is observed.
+  * From the normality plot it can be observed that age is right skewed and a log transform will approx normality. Similarly, fnlwgt is highly right skewed and log transformation will approx normality. Hours.per.week appears to be symmetric though do not have normal distribution. Capital.gain and Capital.loss has majority of data points as zero (0) and log transformation will introduce '-inf' and adding a constant of '1' before log transformation does not make the data distribution any better.  
+
+
+# Task II: Data Preparation
+```{r Data transformation & preparation, warning=FALSE, message=FALSE}
+# removing leading blank space from column data point 
+data$workclass <- trimws(data$workclass, which = c("left"))
+data$education <- (trimws(data$education, which = c("left")))
+data$marital.status<- (trimws(data$marital.status, which = c("left")))
+data$occupation <- (trimws(data$occupation, which = c("left"))) 
+data$relationship <- (trimws(data$relationship, which = c("left")))
+data$race <- (trimws(data$race, which = c("left")))
+data$sex <- (trimws(data$sex, which = c("left")))
+data$native.country <- (trimws(data$native.country, which = c("left")))
+data$y <- (trimws(data$y, which = c("left")))
+
+
+# setting '?' as other category as it is not given if the values are missing or not
+data$workclass[as.character(data$workclass) == "?"] <- "other"
+data$occupation[as.character(data$occupation) == "?"] <- "other"
+data$native.country[as.character(data$native.country) == "?"] <- "other"
+
+# transform target variable
+data$y <- ifelse(data$y == "<=50K",0,1)
+
+# removing eductaion.num
+data<- data %>% select(-education.num)
+
+# transform all character variables to factors except 'Name'
+data <- data %>% mutate(across(c(workclass, education, marital.status,occupation,relationship, race, sex, native.country, y),factor))
+
+# based on the data distribution log transformation 
+data$age<-log(data$age) # right skewed
+data$fnlwgt <- log(data$fnlwgt) # right skewed
+
+# Summary after data transformation
+summary(data)
+```
+
+## Data Preparation
+  * Leading blank space from the character variables have been removed.
+  * All '?' are assigned to the other category in workclass, occupation, and native.country variables as there is no information about the missing data is provided
+  * Target variable is transformed to binary as <=50K is assigned 0 and >50K is assigned as 1.
+  * As education and education.num represents same thing education.num is removed and education is kept as having labels would be easier to interpret the model results.
+  * All character variables are converted to factors (workclass, education, marital.status,occupation,relationship, race, sex, native.country, y).
+  * As observed from the normality plot age is right skewed so it is log transformed to approx normality or being symmetric
+  * As observed from the normality plot fnlwgt is right skewed so it is log transformed to approx normality or being symmetric.
+
+```{r data partition and preparation for model building, warning=FALSE, message=FALSE}
+#Setting a random seed
+set.seed(100)
+# Row Index
+inTrain <- createDataPartition(data$y, p=0.7, list=FALSE)
+# Data Partition
+train_data <- data[inTrain,]
+test_data <- data[-inTrain,]
+
+train_target <- data[inTrain,14]
+test_target <- data[-inTrain,14]
+train_input <- data[inTrain,-14]
+test_input <- data[-inTrain,-14]
+
+
+# 1.C
+
+# Distribution of y in the whole data set
+prop.table(table(data$y)) * 100
+
+# Distribution of y in the train data set
+prop.table(table(train_target)) * 100
+
+# Count & Distribution of y in the test data set
+prop.table(table(test_target)) * 100
+```
+
+## Data Partition
+  * Data has been partitioned into train and test data set based on a 70:30 split. It can be observed that data is partitioned nicely and target variable(y) proportion is same across the three data sets.y variable is distributed similarly, having approx. 75.92% (0 or <=50K salary) and approx. 24.08% (1 or >50k salary).  
+
+
+# Task III: Model Building
+
+```{r Decision Tree (C5.0), warning=FALSE, message=FALSE}
+tree_cf_model <- C5.0(train_target ~ .,train_input,control = C5.0Control(CF= 0.1,earlyStopping = FALSE, noGlobalPruning = FALSE))
+tree_cf_model
+
+# Train data prediction
+tree_cf_train_predictions <- predict(tree_cf_model,train_input)
+# Test data prediction
+tree_cf_test_predictions <- predict(tree_cf_model,test_input)
+
+# Confusion matrix for train data prediction
+mmetric(train_target, tree_cf_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_target, tree_cf_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_target, tree_cf_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_target, tree_cf_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+# Feature Importance
+C5imp(tree_cf_model)
+```
+
+```{r C5.0 cv function and k-fold cross validation, warning=FALSE, message=FALSE}
+cv_function0 <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  metrics_list <- c("ACC","PRECISION","TPR","F1")
+ 
+ cv_results <- lapply(folds, function(x)
+ { 
+   train <- df[-x,-target]
+   test  <- df[x,-target]
+   
+   train_target <- df[-x,target]
+   test_target <- df[x,target]
+   
+   classification_model <- classification(train,train_target) 
+   
+   pred<- predict(classification_model,test)
+   
+   return(mmetric(test_target,pred,metrics_list))
+ })
+ 
+ cv_results_m <- as.matrix(as.data.frame(cv_results))
+
+ cv_mean<- as.matrix(rowMeans(cv_results_m))
+ 
+ colnames(cv_mean) <- "Mean"
+ 
+ cv_sd <- as.matrix(rowSds(cv_results_m))
+ 
+ colnames(cv_sd) <- "Sd"
+ 
+ cv_all <- as.data.frame(cbind(cv_results_m, cv_mean, cv_sd))
+ 
+ kable(cv_all,digits=2, align=rep('c', 10))
+}
+cv_c5.0<-cv_function0(metrics_list =  metrics_list, 
+            df = data, 
+            target = 14, 
+            nFolds = 10, 
+            seed = 100,
+            classification =  C5.0)
+cv_c5.0
+```
+
+
+```{r rpart model, warning=FALSE, message=FALSE}
+tree_rpart_model <- rpart(train_target ~ .,train_input)
+tree_rpart_model
+
+# Train data prediction
+tree_rpart_train_predictions <- predict(tree_rpart_model,train_input)
+# Test data prediction
+tree_rpart_test_predictions <- predict(tree_rpart_model,test_input)
+
+# Confusion matrix for train data prediction
+mmetric(train_target, tree_rpart_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_target, tree_rpart_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_target, tree_rpart_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_target, tree_rpart_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+# Feature Importance
+tree_rpart_model$variable.importance
+```
+
+
+```{r rpart cv function and k-fold cross validation, warning=FALSE, message=FALSE}
+cv_function1 <- function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+{
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  cv_results <- lapply(folds, function(x)
+  { 
+    test_target <- df[x,target]
+    test_input  <- df[x,-target]
+
+    train_target <- df[-x,target]
+    train_input <- df[-x,-target]
+
+    prediction_model <- prediction_method(train_target~.,train_input) 
+    pred<- predict(prediction_model,test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Sd"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable((cv_all),digits=2,  align=rep('c', 10))
+}
+
+
+df <- data
+target <- 14
+nFolds <- 10
+seedVal <- 100
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+
+assign("prediction_method", rpart)
+rpart_cv<-cv_function1(df, target, nFolds, seedVal, prediction_method, metrics_list)
+rpart_cv
+```
+
+```{r ksvm default model, warning=FALSE, message=FALSE}
+ksvm_model <- ksvm(train_target ~ .,train_input)
+ksvm_model
+
+# Train data prediction
+ksvm_model_train_predictions <- predict(ksvm_model,train_input)
+# Test data prediction
+ksvm_model_test_predictions <- predict(ksvm_model,test_input)
+
+# Confusion matrix for train data prediction
+mmetric(train_target, ksvm_model_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_target, ksvm_model_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_target, ksvm_model_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_target, ksvm_model_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+```
+
+```{r ksvm modified model, warning=FALSE, message=FALSE}
+ksvm_model <- ksvm(train_target ~ .,train_input, kernel = 'laplacedot', C = 5)
+ksvm_model
+
+# Train data prediction
+ksvm_model_train_predictions <- predict(ksvm_model,train_input)
+# Test data prediction
+ksvm_model_test_predictions <- predict(ksvm_model,test_input)
+
+# Confusion matrix for train data prediction
+mmetric(train_target, ksvm_model_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_target, ksvm_model_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_target, ksvm_model_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_target, ksvm_model_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+```
+
+```{r ksvm k-fold cross validation, warning=FALSE, message=FALSE}
+
+df <- data
+target <- 14
+nFolds <- 4
+seedVal <- 100
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+
+assign("prediction_method", ksvm)
+ksvm_cv <- cv_function1(df, target, nFolds, seedVal, prediction_method, metrics_list)
+ksvm_cv
+```
+
+
+```{r Naïve Bayes & K-fold cross validation, warning=FALSE, message=FALSE}
+nb_model <- naiveBayes(train_target~., train_input)
+nb_model
+
+# Predicting train set
+predicted_nb_train <- predict(nb_model, train_data)
+# Confusin Matrix
+mmetric(train_target, predicted_nb_train, metric="CONF")
+# Evaluation Metrics
+mmetric(train_target, predicted_nb_train, metric=c("ACC","TPR","PRECISION","F1"))
+
+# Predicting test set
+predicted_nb_test <- predict(nb_model, test_input)
+# Confusin Matrix
+mmetric(test_target, predicted_nb_test, metric="CONF")
+# Evaluation Metrics
+mmetric(test_target, predicted_nb_test, metric=c("ACC","TPR","PRECISION","F1"))
+
+# K-fold cross validation
+nb_cv<-cv_function0(metrics_list =  metrics_list, 
+            df = data, 
+            target = 14, 
+            nFolds = 10, 
+            seed = 100,
+            classification =  naiveBayes)
+nb_cv
+```
+
+
+
+```{r MLP model, warning=FALSE, message=FALSE}
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+mlp_model <- MLP(train_target ~ .,data = train_input, control = Weka_control(H='2, 2', L = 0.005))
+mlp_model
+
+
+# Train data prediction
+mlp_train_predictions <- predict(mlp_model,train_input)
+# Test data prediction
+mlp_test_predictions <- predict(mlp_model,test_input)
+
+# Confusion matrix for train data prediction
+mmetric(train_target, mlp_train_predictions, metric="CONF")$conf
+# Confusion matrix for test data prediction
+mmetric(test_target, mlp_test_predictions, metric="CONF")$conf
+
+#Evaluation metrics for train data prediction
+mmetric(train_target, mlp_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mmetric(test_target, mlp_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+```
+
+
+
+```{r MLP CV function, warning=FALSE, message=FALSE}
+cv_function_MLP <- function(df, target, nFolds, seedVal, metrics_list, l, m, n, h)
+{
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+# The lapply loop
+
+cv_results <- lapply(folds, function(x)
+{ 
+# data preparation:
+
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+  pred_model <- MLP(train_target ~ .,data = train_input,control = Weka_control(L=l,M=m, N=n,H=h))  
+  pred <- predict(pred_model, test_input)
+  return(mmetric(test_target,pred,metrics_list))
+})
+
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+cv_sd <- as.matrix(rowSds(cv_results_m))
+colnames(cv_mean) <- "Mean"
+colnames(cv_sd) <- "Sd"
+cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable((cv_all),digits=2)
+}
+
+```
+
+
+```{r MLP K-fold cross validation, warning=FALSE, message=FALSE}
+df = data
+target = 14
+nFolds = 3
+seedVal = 100
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+mlp_cv<-cv_function_MLP(df, target, nFolds, seedVal, metrics_list, 0.005, 0.1, 600, '10, 10')
+mlp_cv
+```
+
+## Model Building
+
+  * Multiple C5.0, rpart, ksvm, MLP models along with the k-fold cross validations have been built to predict the salary. Models are used to predict both train and test data set to understand over or under fitting of the models. 
+  * Confusion matrix, Accuracy, True Positive Rate, Precision, and F-score are used to understand the models' performance as this is a classification problem.
+
+
+```{r model performances}
+#Evaluation metrics for train data prediction
+C5.0_train <- mmetric(train_target, tree_cf_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+C5.0_test <-mmetric(test_target, tree_cf_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+#Evaluation metrics for train data prediction
+rpart_train <- mmetric(train_target, tree_rpart_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+rpart_test <- mmetric(test_target, tree_rpart_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+#Evaluation metrics for train data prediction
+ksvm_train <- mmetric(train_target, ksvm_model_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+ksvm_test <- mmetric(test_target, ksvm_model_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+
+nb_train <- mmetric(train_target, predicted_nb_train, metric=c("ACC","TPR","PRECISION","F1"))
+# Evaluation Metrics
+nb_test <- mmetric(test_target, predicted_nb_test, metric=c("ACC","TPR","PRECISION","F1"))
+
+#Evaluation metrics for train data prediction
+mlp_train <- mmetric(train_target, mlp_train_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+#Evaluation metrics for test data prediction
+mlp_test <- mmetric(test_target, mlp_test_predictions, metric= c("ACC","TPR","PRECISION","F1"))
+
+
+model_perfromance <- as.data.frame(cbind( C5.0_train, C5.0_test, rpart_train, rpart_test, ksvm_train, ksvm_test, nb_train, nb_test, mlp_train, mlp_test))
+
+model_perfromance
+
+print("C5.0 Decision Tree 10-fold CV")
+cv_c5.0
+print("rpart 10-fold CV")
+rpart_cv
+print("ksvm 4-fold CV")
+ksvm_cv
+print("NB 10-fold CV")
+nb_cv
+print("MLP 3-fold CV")
+mlp_cv
+```
+
+
+
+# Task IV: Reflections
+  
+  * Multiple classification models have been built to predict if the salary of the observations is (0 or <= 50K) or (1 or >50K). This information will be used by the company to market financial products to these individuals.
+    1. C5.0 Decision Tree:
+    A decision tree with CF 0.1 has been built. It has 38 leaf nodes. For the decision tree training set accuracy is 87.28% and test set accuracy is 86.68%. Training set is a little over fitted.  In both the train and test set TPR1 (94.54, 94.09) is higher than TPR2 (64.38, 63.31), which indicates that models are better at predicting the class1 (0) than class2 (1). Similarly, precision for class1 in both train and test (89.33, 88.99) are better than precision for class2 (78.92, 77.27), which indicates that when the models predict Class 1, it is more likely to be correct and when the models predict Class 2, it is less accurate compared to its predictions for Class 1.
+
+    2. C5.0 10-fold cross validation:
+    10 fold cross validation model is built. Fold 4 has the best accuracy of 87.93% with a TPR1 & 2 of (93.45, 70.54) and Precision 1 & 2 of (90.91, 77.34). 
+
+    3. Recursive partitioning for classification (rpart):
+    An rpart model is built with 5 leaf nodes.  For the rpart model training set accuracy is 84.70% and test set accuracy is 83.89%. Training set is a little over fitted.  In both the train and test set TPR1 (95.12, 94.58) is higher than TPR2 (51.83, 50.17), which indicates that models are better at predicting the class1 (0) than class2 (1). Similarly, precision for class1 in both train and test (86.16, 85.68) are better than precision for class2 (77.10, 74.59) which indicates that when the models predict Class 1, it is more likely to be correct and when the models predict Class 2, it is less accurate compared to its predictions for Class 1. However, this model did not outperform fold 4 of C5.0 10-fold cross validation.
+
+    4. Recursive partitioning for classification (rpart) 10 -fold cross validation:
+10 fold cross validation model is built. Fold 4 has the best accuracy of 84.92% with a TPR1 & 2 of (95.19, 51.28) and Precision 1 & 2 of (86.35, 77.59). However, this model did not outperform fold 4 of C5.0 10-fold cross validation though it has better TPR1 and Precision1. 
+
+    5. Support Vector Machines (ksvm):
+    A ksvm model is built with default settings.  For the ksvm default model training set accuracy is 86.86% and test set accuracy is 85.46%. Training set is a little over fitted.  In both the train and test set TPR1 (94.82, 93.65) is higher than TPR2 (61.74, 59.65), which indicates that models are better at predicting the class1 (0) than class2 (1). Similarly, precision for class1 in both train and test (88.65, 87.98) are better than precision for class2 (79.09, 74.87) which indicates that when the models predict Class 1, it is more likely to be correct and when the models predict Class 2, it is less accurate compared to its predictions for Class 1. However, this model did not outperform fold 4 of C5.0 10-fold cross validation.
+    Another ksvm model is built with ‘laplacedot’ kernel and cost value of 5.  For this ksvm model training set accuracy is 90.67% and test set accuracy is 85.44%. Training set is a highly over fitted as there is an accuracy drop of 5.23 % in the test data set.  In both the train and test set TPR1 (96.35, 93.01) is higher than TPR2 (72.73, 61.56), which indicates that models are better at predicting the class1 (0) than class2 (1). Similarly, precision for class1 in both train and test (86.37, 73.65) are better than precision for class2 (86.37, 73.65) which indicates that when the models predict Class 1, it is more likely to be correct and when the models predict Class 2, it is less accurate compared to its predictions for Class 1. However, this model did not outperform fold 4 of C5.0 10-fold cross validation due to high over fitting.
+
+    6. Support Vector Machines (ksvm) 4-fold cross validation:
+4 fold cross validation model is built. Fold 1 has the best accuracy of 85.77% with a TPR1 & 2 of (94.65, 57.77) and Precision 1 & 2 of (87.60, 77.40). However, this model did not outperform fold 4 of C5.0 10-fold cross validation.
+    
+    7. Naïve Bayes Model:
+    A Naïve Bayes model has been built. For the Naïve Bayes model training set accuracy is 82.23% and test set accuracy is 81.64%. Training set is a little over fitted.  In both the train and test set TPR1 (93.98, 93.66) is higher than TPR2 (45.18, 43.75), which indicates that models are better at predicting the class1 (0) than class2 (1). Similarly, precision for class1 in both train and test (84.39, 84.00) are better than precision for class2 (70.43, 68.65), which indicates that when the models predict Class 1, it is more likely to be correct and when the models predict Class 2, it is less accurate compared to its predictions for Class 1. However, this model did not outperform fold 4 of C5.0 10-fold cross validation.
+
+    8. Naïve Bayes Model 10-fold cross validation:
+10 fold cross validation model is built. Fold 3 has the best accuracy of 82.74% with a TPR1 & 2 of (94.78, 44.77) and Precision 1 & 2 of (84.40, 68.85). However, this model did not outperform fold 4 of C5.0 10-fold cross validation.
+
+    9. Multi-Layer Perceptrons (MLP) for classification:
+A MLP model has been built with two hidden layers having two nodes each and learning rate of 0.005. For the MLP model training set accuracy is 85.63% and test set accuracy is 84.55%. Training set is a little over fitted.  In both the train and test set TPR1 (91.36, 90.80) is higher than TPR2 (67.55, 64.84), which indicates that models are better at predicting the class1 (0) than class2 (1). Similarly, precision for class1 in both train and test (89.87, 89.06) are better than precision for class2 (71.27, 69.10), which indicates that when the models predict Class 1, it is more likely to be correct and when the models predict Class 2, it is less accurate compared to its predictions for Class 1. However, this model did not outperform fold 4 of C5.0 10-fold cross validation.
+
+    10. Multi-Layer Perceptrons (MLP) for classification 3-fold cross validation:
+3 fold cross validation MLP model is built with learning rate of 0.005, momentum of 0.1, 600 epochs, and 2 hidden layers with 10 nodes in each hidden layer. Fold 1 has the best accuracy of 85.54% with a TPR1 & 2 of (94.44, 57.50) and Precision 1 & 2 of (87.51, 76.64). However, this model did not outperform fold 4 of C5.0 10-fold cross validation when comparing for Accuracy, TPR, and Precision.
+
+  * C5.0 tree model fold 4 from the cross validation is the best performing model as it is balanced in terms of over or under fitting with best accuracy, TPR of class 1 and 2, and Precision of Class 1 and 2. Naïve Bayes models are worst model with lowest Accuracy, TPR, and Precision for train and test set prediction and 10-fold cross validation comparing to other models.
+  
+  * From feature importance it can be observed that capital.gain has the feature importance of 100.00 for developing the C5.0 tree. Hence, capital.gain is the most important feature to predict y. Similarly, for the rpart model relationship is the most important variable to develop the model or to predict y, though it is not the best performing model. 
+  
+  * Majority rule classifier typically refers to a simple type of classification algorithm that makes predictions based on the majority class in a data set. When making predictions on new or unseen data, the majority rule classifier predicts the class that is most prevalent in the training dataset. So, in this data set as majority is 0 or salary <=50k (75.92%) majority rule classifier would have predicted just 75.92% of observations correctly however with accuracy of 87.93% C5.0 tree model fold 4 would able to predict 87.93% of observations correctly. That's an improvement of 12.01% in accuracy.
+  
+  *  Random classifier is a simple type of classifier that makes predictions based on random chance. In binary classification problems, where there are two possible classes (e.g., 0 and 1), a random classifier assigns each class with an equal probability of 0.5 or accuracy of 50%. So, C5.0 tree model fold 4 with an accuracy of 87.93% would be able to predict 87.93% of observations correctly that's an improvement 37.93% in accuracy over the random classifier.
+  
+  * Mistakes in predictions when marketing financial products to individuals can have significant consequences, both for the individuals involved and for the financial institution offering the products. Here are the potential ramifications for the two scenarios you mentioned:
+    1. Low Income Individual Categorized as High Income:
+    This happens when actual y value is 0 or <=50K but classified as 1 or >50K. If a person with low income is mistakenly categorized as having high income and is marketed a high-income financial product, they may face financial strain and struggle to meet the repayment obligations. This can lead to financial distress, missed payments, and a negative impact on their credit history. Offering a high-income product to someone with limited financial capacity increases the risk of default. The individual may find it difficult to repay the loan, leading to potential legal and credit-related consequences. The financial institution faces an increased risk of non-performing loans and defaults, impacting its financial stability and profitability.
+  
+    2. High Income Individual Categorized as Low Income:
+    This happens when actual y value is 1 or >50K but classified as 0 or <=50K. If a high-income individual is incorrectly categorized as having low income, they may be offered less profitable financial products than they are eligible for. This results in missed opportunities for better-suited products with more favorable terms and features. The financial institution may miss out on potential revenue by not offering more profitable products to eligible high-income customers. This can impact the institution's overall financial performance and competitiveness in the market. High-income individuals may be dissatisfied if they receive offers that do not align with their financial status. This dissatisfaction could lead to a loss of valuable customers and damage the institution's relationship with its clientele.
+    
+  * By comparing TRP of class 1 and 2, Precision of Class 1 and 2, and F11 and F12 in the C5.0 tree model fold 4 it can observed that class1 (0 or <=50K salary) is predicted better than the class2 (1 or >50K). So, model will make less mistakes in predicting low income individuals in high income category.     
+
+  
