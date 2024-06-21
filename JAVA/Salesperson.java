@@ -1,14 +1,14 @@
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Main.java to edit this template
  */
-package demosalesperson;
+package salesperson;
 
 /**
  *
- * @author RR
+ * @author u6023321
  */
-class Salesperson {
+public class Salesperson {
     private int idNumber;
     private double annualSalesAmount;
 
@@ -17,20 +17,25 @@ class Salesperson {
         this.idNumber = idNumber;
         this.annualSalesAmount = annualSalesAmount;
     }
+
     // Getter and Setter methods for idNumber
     public int getIdNumber() {
         return idNumber;
     }
+
     public void setIdNumber(int idNumber) {
         this.idNumber = idNumber;
     }
+
     // Getter and Setter methods for annualSalesAmount
     public double getAnnualSalesAmount() {
         return annualSalesAmount;
     }
+
     public void setAnnualSalesAmount(double annualSalesAmount) {
         this.annualSalesAmount = annualSalesAmount;
     }
+
     // Override toString method to display Salesperson details
     @Override
     public String toString() {
